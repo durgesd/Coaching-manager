@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Pragya Coaching — Manager</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1B2A4A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#1B2A4A;
+    --navy-deep:#131F38;
+    --paper:#F7F5EF;
+    --paper-deep:#EFEADC;
+    --brass:#B8862B;
+    --brass-light:#E4B75E;
+    --sage:#4C7A64;
+    --sage-bg:#E7F1EB;
+    --rust:#B23A2E;
+    --rust-bg:#FBEAE8;
+    --ink:#20263A;
+    --ink-soft:#5B6478;
+    --card:#FFFFFF;
+    --line:#E4DFCF;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Inter",-apple-system,Segoe UI,sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+    padding:0 0 74px;
+  }
+  .num{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;}
+
+  /* ---------- Header ---------- */
+  header{
+    position:relative;
+    padding:20px 18px 0;
+    background:linear-gradient(160deg, var(--navy) 0%, var(--navy-deep) 100%);
+    color:#fff;
+    overflow:hidden;
+  }
+  header::after{
+    content:"";
+    position:absolute; inset:0;
+    background-image:repeating-linear-gradient(90deg, rgba(184,134,43,.06) 0 1px, transparent 1px 26px);
+    pointer-events:none;
+  }
+  .brand-row{display:flex;align-items:center;gap:12px;position:relative;z-index:1;}
+  .brand-mark{
+    width:42px;height:42px;border-radius:10px;
+    background:var(--brass);
+    display:flex;align-items:center;justify-content:center;
+    font-family:"Fraunces",serif;font-weight:700;font-size:19px;color:var(--navy-deep);
+    flex:none;
+  }
+  .brand-text h1{
+    font-family:"Fraunces",serif;font-weight:600;font-size:19px;margin:0;line-height:1.1;
+  }
+  .brand-text .sub{font-size:11.5px;color:rgba(255,255,255,.65);margin-top:2px;}
+
+  nav{
+    display:flex; gap:2px; overflow-x:auto; margin-top:16px;
+    position:relative; z-index:1;
+    border-top:1px solid rgba(255,255,255,.14);
+    -ms-overflow-style:none; scrollbar-width:none;
+  }
+  nav::-webkit-scrollbar{display:none;}
+  .tab-btn{
+    flex:none; background:none; border:none; color:rgba(255,255,255,.6);
+    font-weight:600; font-size:12.5px; padding:12px 14px 10px; cursor:pointer;
+    white-space:nowrap; border-bottom:2px solid transparent;
+  }
+  .tab-btn.active{color:#fff;border-bottom-color:var(--brass);}
+
+  main{max-width:720px;margin:0 auto;padding:18px 14px 0;}
+  .view{display:none;}
+  .view.active{display:block;}
+
+  /* ---------- Cards ---------- */
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:16px; margin-bottom:14px;
+  }
+  .card h3{font-family:"Fraunces",serif;font-size:16px;margin:0 0 4px;color:var(--navy);}
+  .hint{font-size:12px;color:var(--ink-soft);line-height:1.5;margin:4px 0 10px;}
+
+  /* ---------- Stat grid ---------- */
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+  .stat-card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px;
+  }
+  .stat-card .label{font-size:11px;color:var(--ink-soft);font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+  .stat-card .value{font-family:"JetBrains Mono",monospace;font-weight:700;font-size:21px;color:var(--navy);margin-top:4px;}
+  .stat-card.warn .value{color:var(--rust);}
+  .stat-card.good .value{color:var(--sage);}
+
+  /* ---------- Forms ---------- */
+  label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin:10px 0 4px;}
+  label:first-child{margin-top:0;}
+  input[type=text], input[type=tel], input[type=number], input[type=date], select, textarea{
+    width:100%; padding:10px 12px; border-radius:9px; border:1.5px solid var(--line);
+    background:var(--paper); color:var(--ink); font-size:14px; font-family:"Inter",sans-serif;
+  }
+  textarea{min-height:60px;resize:vertical;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+  .btn{
+    border:none; border-radius:9px; padding:11px 16px;
+    font-weight:700; font-size:13.5px; cursor:pointer; color:#fff;
+    display:inline-flex; align-items:center; gap:6px;
+    box-shadow:0 2px 0 rgba(0,0,0,.15);
+  }
+  .btn:active{transform:translateY(2px);box-shadow:0 0 0 rgba(0,0,0,.15);}
+  .btn.primary{background:var(--navy);}
+  .btn.brass{background:var(--brass);color:var(--navy-deep);}
+  .btn.sage{background:var(--sage);}
+  .btn.rust{background:var(--rust);}
+  .btn.ghost{background:var(--paper-deep);color:var(--ink);}
+  .btn.small{padding:8px 12px;font-size:12px;}
+  .btn.block{width:100%;justify-content:center;}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+
+  /* ---------- Lists ---------- */
+  .search-box{margin-bottom:10px;}
+  .list-item{
+    background:var(--card); border:1px solid var(--line); border-radius:11px;
+    padding:12px 14px; margin-bottom:8px; cursor:pointer;
+    display:flex; align-items:center; gap:10px;
+  }
+  .list-item .avatar{
+    width:38px;height:38px;border-radius:9px;background:var(--paper-deep);
+    display:flex;align-items:center;justify-content:center;
+    font-family:"Fraunces",serif;font-weight:700;color:var(--navy);font-size:15px;flex:none;
+  }
+  .list-item .info{flex:1;min-width:0;}
+  .list-item .name{font-weight:700;font-size:14.5px;color:var(--ink);}
+  .list-item .meta{font-size:11.5px;color:var(--ink-soft);margin-top:1px;}
+  .badge{
+    font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:20px;
+    white-space:nowrap;
+  }
+  .badge.paid{background:var(--sage-bg);color:var(--sage);}
+  .badge.due{background:var(--rust-bg);color:var(--rust);}
+  .empty-state{text-align:center;padding:36px 20px;color:var(--ink-soft);}
+  .empty-state .big{font-size:34px;margin-bottom:8px;}
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(19,31,56,.5);
+    z-index:100; align-items:flex-end; justify-content:center;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal-sheet{
+    background:var(--paper); width:100%; max-width:720px; max-height:88vh; overflow-y:auto;
+    border-radius:18px 18px 0 0; padding:18px 16px 26px;
+  }
+  .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .modal-head h3{font-family:"Fraunces",serif;font-size:17px;margin:0;color:var(--navy);}
+  .close-x{background:none;border:none;font-size:20px;color:var(--ink-soft);cursor:pointer;padding:4px 8px;}
+
+  /* ---------- Receipt ---------- */
+  .receipt{
+    background:#fff; border:1.5px dashed var(--brass); border-radius:10px; padding:18px;
+    font-family:"JetBrains Mono",monospace; font-size:12.5px; color:var(--ink);
+  }
+  .receipt .r-head{text-align:center;margin-bottom:12px;}
+  .receipt .r-head .rname{font-family:"Fraunces",serif;font-weight:700;font-size:16px;color:var(--navy);}
+  .receipt .r-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dotted var(--line);}
+  .receipt .r-total{display:flex;justify-content:space-between;padding-top:8px;margin-top:6px;border-top:1.5px solid var(--ink);font-weight:700;}
+
+  /* ---------- Attendance grid ---------- */
+  .att-row{
+    display:flex;align-items:center;justify-content:space-between;
+    background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:10px 12px;margin-bottom:6px;
+  }
+  .att-toggle{display:flex;gap:6px;}
+  .att-toggle button{
+    border:1.5px solid var(--line);background:var(--paper);border-radius:8px;
+    padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;color:var(--ink-soft);
+  }
+  .att-toggle button.p.active{background:var(--sage);color:#fff;border-color:var(--sage);}
+  .att-toggle button.a.active{background:var(--rust);color:#fff;border-color:var(--rust);}
+
+  .install-banner{
+    background:var(--brass-light); color:var(--navy-deep); font-size:12px; font-weight:600;
+    padding:10px 14px; border-radius:10px; margin-bottom:14px; display:none;
+  }
+  .install-banner.show{display:block;}
+
+  footer{text-align:center;font-size:11px;color:var(--ink-soft);margin-top:20px;}
+
+  @media print{
+    body *{visibility:hidden;}
+    #printArea, #printArea *{visibility:visible;}
+    #printArea{position:absolute;left:0;top:0;width:100%;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand-row">
+    <div class="brand-mark" id="brandInitial">P</div>
+    <div class="brand-text">
+      <h1 id="coachingNameDisplay">Pragya Coaching</h1>
+      <div class="sub">Admissions · Fees · Attendance</div>
+    </div>
+  </div>
+  <nav>
+    <button class="tab-btn active" id="navDashboard" onclick="showView('dashboard')">Dashboard</button>
+    <button class="tab-btn" id="navStudents" onclick="showView('students')">Students</button>
+    <button class="tab-btn" id="navFees" onclick="showView('fees')">Fees</button>
+    <button class="tab-btn" id="navAttendance" onclick="showView('attendance')">Attendance</button>
+    <button class="tab-btn" id="navBatches" onclick="showView('batches')">Batches</button>
+    <button class="tab-btn" id="navSettings" onclick="showView('settings')">Settings</button>
+  </nav>
+</header>
+
+<main>
+
+  <div class="install-banner" id="installBanner">📲 Install this app: tap your browser menu → "Add to Home Screen" for one-tap access, even offline.</div>
+
+  <!-- ============ DASHBOARD ============ -->
+  <section class="view active" id="view-dashboard">
+    <div class="stat-grid">
+      <div class="stat-card"><div class="label">Total Students</div><div class="value num" id="statStudents">0</div></div>
+      <div class="stat-card good"><div class="label">Collected</div><div class="value num" id="statCollected">₹0</div></div>
+      <div class="stat-card warn"><div class="label">Pending Dues</div><div class="value num" id="statPending">₹0</div></div>
+      <div class="stat-card"><div class="label">Active Batches</div><div class="value num" id="statBatches">0</div></div>
+    </div>
+
+    <div class="card">
+      <h3>Recent Admissions</h3>
+      <div id="recentAdmissions"></div>
+    </div>
+
+    <div class="card">
+      <h3>Students With Pending Dues</h3>
+      <div id="duesList"></div>
+    </div>
+  </section>
+
+  <!-- ============ STUDENTS ============ -->
+  <section class="view" id="view-students">
+    <div class="btn-row" style="margin-top:0;margin-bottom:12px;">
+      <button class="btn primary" onclick="openStudentForm()">+ New Admission</button>
+    </div>
+    <input type="text" class="search-box" id="studentSearch" placeholder="Search by name or phone..." oninput="renderStudentList()">
+    <div id="studentList"></div>
+  </section>
+
+  <!-- ============ FEES ============ -->
+  <section class="view" id="view-fees">
+    <div class="card">
+      <h3>Record a Payment</h3>
+      <p class="hint">Select a student, enter the amount received, and save — this works for the advance fee at admission or any later installment.</p>
+      <label>Student</label>
+      <select id="feePaymentStudent"></select>
+      <div class="row2">
+        <div><label>Amount (₹)</label><input type="number" id="feePaymentAmount" placeholder="0"></div>
+        <div><label>Date</label><input type="date" id="feePaymentDate"></div>
+      </div>
+      <label>Mode</label>
+      <select id="feePaymentMode">
+        <option>Cash</option>
+        <option>UPI</option>
+        <option>Bank Transfer</option>
+        <option>Cheque</option>
+      </select>
+      <label>Note (optional)</label>
+      <input type="text" id="feePaymentNote" placeholder="e.g. Advance fee, 2nd installment">
+      <div class="btn-row">
+        <button class="btn brass" onclick="recordPayment()">💰 Save Payment</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>All Payments</h3>
+      <div id="paymentsList"></div>
+    </div>
+  </section>
+
+  <!-- ============ ATTENDANCE ============ -->
+  <section class="view" id="view-attendance">
+    <div class="card">
+      <label>Batch</label>
+      <select id="attendanceBatch" onchange="renderAttendanceSheet()"></select>
+      <label>Date</label>
+      <input type="date" id="attendanceDate" onchange="renderAttendanceSheet()">
+    </div>
+    <div id="attendanceSheet"></div>
+  </section>
+
+  <!-- ============ BATCHES ============ -->
+  <section class="view" id="view-batches">
+    <div class="card">
+      <h3>Add a Batch / Course</h3>
+      <label>Batch Name</label>
+      <input type="text" id="batchName" placeholder="e.g. Class 10 Foundation — Morning">
+      <div class="row2">
+        <div><label>Total Course Fee (₹)</label><input type="number" id="batchFee" placeholder="0"></div>
+        <div><label>Start Date</label><input type="date" id="batchStartDate"></div>
+      </div>
+      <label>Schedule / Timing (optional)</label>
+      <input type="text" id="batchSchedule" placeholder="e.g. Mon–Sat, 4:00–6:00 PM">
+      <div class="btn-row">
+        <button class="btn primary" onclick="addBatch()">+ Add Batch</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>All Batches</h3>
+      <div id="batchList"></div>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section class="view" id="view-settings">
+    <div class="card">
+      <h3>Coaching Details</h3>
+      <p class="hint">Shown on the app header and on printed fee receipts.</p>
+      <label>Coaching Name</label>
+      <input type="text" id="settingCoachingName" placeholder="e.g. Sankalp Coaching Classes">
+      <label>Address</label>
+      <input type="text" id="settingAddress" placeholder="e.g. Near Bus Stand, Sector 12">
+      <label>Contact Number</label>
+      <input type="tel" id="settingPhone" placeholder="e.g. 98765 43210">
+      <div class="btn-row">
+        <button class="btn primary" onclick="saveSettings()">💾 Save</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Backup &amp; Restore</h3>
+      <p class="hint">Export all your data as a file you can keep safe, or restore it on a new device.</p>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn ghost small" onclick="exportBackup()">⬇ Export Backup</button>
+        <button class="btn ghost small" onclick="document.getElementById('restoreFile').click()">⬆ Restore Backup</button>
+        <input type="file" id="restoreFile" accept="application/json" style="display:none;" onchange="restoreBackup(event)">
+      </div>
+    </div>
+  </section>
+
+  <footer>Sankalp Coaching Manager · All data stored privately on this device</footer>
+</main>
+
+<!-- Student Admission / Edit Modal -->
+<div class="modal-overlay" id="studentModal">
+  <div class="modal-sheet">
+    <div class="modal-head"><h3 id="studentModalTitle">New Admission</h3><button class="close-x" onclick="closeModal('studentModal')">✕</button></div>
+    <input type="hidden" id="studentId">
+    <label>Student Name</label>
+    <input type="text" id="studentName" placeholder="Full name">
+    <div class="row2">
+      <div><label>Phone</label><input type="tel" id="studentPhone" placeholder="Student's number"></div>
+      <div><label>Parent's Phone</label><input type="tel" id="studentParentPhone" placeholder="Parent's number"></div>
+    </div>
+    <label>Address</label>
+    <input type="text" id="studentAddress" placeholder="Optional">
+    <div class="row2">
+      <div><label>Batch</label><select id="studentBatch"></select></div>
+      <div><label>Admission Date</label><input type="date" id="studentAdmissionDate"></div>
+    </div>
+    <div class="row2">
+      <div><label>Total Course Fee (₹)</label><input type="number" id="studentTotalFee" placeholder="0"></div>
+      <div><label>Advance Paid Now (₹)</label><input type="number" id="studentAdvanceFee" placeholder="0"></div>
+    </div>
+    <label>Notes (optional)</label>
+    <textarea id="studentNotes" placeholder="Any remarks"></textarea>
+    <div class="btn-row">
+      <button class="btn primary block" onclick="saveStudent()">Save Student</button>
+    </div>
+  </div>
+</div>
+
+<!-- Student Detail Modal -->
+<div class="modal-overlay" id="studentDetailModal">
+  <div class="modal-sheet">
+    <div class="modal-head"><h3 id="detailStudentName">Student</h3><button class="close-x" onclick="closeModal('studentDetailModal')">✕</button></div>
+    <div id="studentDetailBody"></div>
+  </div>
+</div>
+
+<!-- Receipt Modal -->
+<div class="modal-overlay" id="receiptModal">
+  <div class="modal-sheet">
+    <div class="modal-head"><h3>Fee Receipt</h3><button class="close-x" onclick="closeModal('receiptModal')">✕</button></div>
+    <div id="printArea"><div class="receipt" id="receiptBody"></div></div>
+    <div class="btn-row">
+      <button class="btn brass block" onclick="window.print()">🖨 Print / Save as PDF</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   DATABASE
+   ========================================================= */
+let db = null;
+function openDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('coachingManagerDB', 1);
+    req.onupgradeneeded = (e) => {
+      const idb = e.target.result;
+      if (!idb.objectStoreNames.contains('students')) idb.createObjectStore('students', {keyPath:'id'});
+      if (!idb.objectStoreNames.contains('batches')) idb.createObjectStore('batches', {keyPath:'id'});
+      if (!idb.objectStoreNames.contains('payments')) idb.createObjectStore('payments', {keyPath:'id'});
+      if (!idb.objectStoreNames.contains('attendance')) idb.createObjectStore('attendance', {keyPath:'id'});
+      if (!idb.objectStoreNames.contains('settings')) idb.createObjectStore('settings', {keyPath:'key'});
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e);
+  });
+}
+function dbGetAll(store){
+  return new Promise(resolve => {
+    const tx = db.transaction(store,'readonly');
+    const req = tx.objectStore(store).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => resolve([]);
+  });
+}
+function dbPut(store, obj){
+  return new Promise(resolve => {
+    const tx = db.transaction(store,'readwrite');
+    tx.objectStore(store).put(obj);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => resolve(false);
+  });
+}
+function dbDelete(store, id){
+  return new Promise(resolve => {
+    const tx = db.transaction(store,'readwrite');
+    tx.objectStore(store).delete(id);
+    tx.oncomplete = () => resolve(true);
+  });
+}
+function dbGet(store, key){
+  return new Promise(resolve => {
+    const tx = db.transaction(store,'readonly');
+    const req = tx.objectStore(store).get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => resolve(null);
+  });
+}
+
+let SETTINGS = { coachingName: 'Pragya Coaching', address: '', phone: '' };
+const money = n => '₹' + Math.round(n||0).toLocaleString('en-IN');
+const todayStr = () => new Date().toISOString().slice(0,10);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+/* =========================================================
+   Tabs
+   ========================================================= */
+function showView(name){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.getElementById('nav' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'students') renderStudentList();
+  if (name === 'fees') renderFeesView();
+  if (name === 'attendance') renderAttendanceSheet();
+  if (name === 'batches') renderBatchList();
+}
+
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+function openModalEl(id){ document.getElementById(id).classList.add('show'); }
+
+/* =========================================================
+   Derived helpers
+   ========================================================= */
+async function getStudentBalance(studentId, students, payments){
+  const student = students.find(s => s.id === studentId);
+  if (!student) return {total:0, paid:0, balance:0};
+  const paid = payments.filter(p => p.studentId === studentId).reduce((a,p)=>a+Number(p.amount||0),0);
+  return { total: Number(student.totalFee||0), paid, balance: Math.max(0, Number(student.totalFee||0) - paid) };
+}
+
+async function batchNameById(id, batches){
+  const b = (batches||[]).find(x => x.id === id);
+  return b ? b.name : '—';
+}
+
+/* =========================================================
+   DASHBOARD
+   ========================================================= */
+async function renderDashboard(){
+  const [students, payments, batches] = await Promise.all([dbGetAll('students'), dbGetAll('payments'), dbGetAll('batches')]);
+
+  document.getElementById('statStudents').textContent = students.length;
+  const totalCollected = payments.reduce((a,p)=>a+Number(p.amount||0),0);
+  document.getElementById('statCollected').textContent = money(totalCollected);
+
+  let totalPending = 0;
+  const duesRows = [];
+  for (const s of students){
+    const bal = await getStudentBalance(s.id, students, payments);
+    totalPending += bal.balance;
+    if (bal.balance > 0) duesRows.push({student:s, balance:bal.balance});
+  }
+  document.getElementById('statPending').textContent = money(totalPending);
+  document.getElementById('statBatches').textContent = batches.length;
+
+  const recent = [...students].sort((a,b)=> (b.admissionDate||'').localeCompare(a.admissionDate||'')).slice(0,5);
+  const recentEl = document.getElementById('recentAdmissions');
+  recentEl.innerHTML = recent.length ? recent.map(s => studentListItemHTML(s, batches)).join('') :
+    '<div class="empty-state"><div class="big">🎓</div>No admissions yet.</div>';
+
+  duesRows.sort((a,b)=> b.balance - a.balance);
+  const duesEl = document.getElementById('duesList');
+  duesEl.innerHTML = duesRows.length ? duesRows.slice(0,8).map(row =>
+    '<div class="list-item" onclick="openStudentDetail(\'' + row.student.id + '\')">' +
+      '<div class="avatar">' + initials(row.student.name) + '</div>' +
+      '<div class="info"><div class="name">' + escapeHtml(row.student.name) + '</div><div class="meta">' + escapeHtml(row.student.phone||'') + '</div></div>' +
+      '<span class="badge due">' + money(row.balance) + ' due</span>' +
+    '</div>'
+  ).join('') : '<div class="empty-state">🎉 No pending dues.</div>';
+}
+
+function initials(name){
+  return (name||'?').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+}
+function escapeHtml(s){
+  const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML;
+}
+
+/* =========================================================
+   STUDENTS
+   ========================================================= */
+async function populateBatchSelect(selectEl, selectedId){
+  const batches = await dbGetAll('batches');
+  selectEl.innerHTML = batches.length ? batches.map(b => '<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('') : '<option value="">No batches yet — add one first</option>';
+  if (selectedId) selectEl.value = selectedId;
+}
+
+async function openStudentForm(existing){
+  document.getElementById('studentModalTitle').textContent = existing ? 'Edit Student' : 'New Admission';
+  document.getElementById('studentId').value = existing ? existing.id : '';
+  document.getElementById('studentName').value = existing ? existing.name : '';
+  document.getElementById('studentPhone').value = existing ? existing.phone : '';
+  document.getElementById('studentParentPhone').value = existing ? existing.parentPhone : '';
+  document.getElementById('studentAddress').value = existing ? existing.address : '';
+  document.getElementById('studentAdmissionDate').value = existing ? existing.admissionDate : todayStr();
+  document.getElementById('studentTotalFee').value = existing ? existing.totalFee : '';
+  document.getElementById('studentAdvanceFee').value = '';
+  document.getElementById('studentNotes').value = existing ? (existing.notes||'') : '';
+  await populateBatchSelect(document.getElementById('studentBatch'), existing ? existing.batchId : null);
+  openModalEl('studentModal');
+}
+
+async function saveStudent(){
+  const id = document.getElementById('studentId').value || uid();
+  const isNew = !document.getElementById('studentId').value;
+  const name = document.getElementById('studentName').value.trim();
+  if (!name){ alert('Enter the student name'); return; }
+
+  const student = {
+    id,
+    name,
+    phone: document.getElementById('studentPhone').value.trim(),
+    parentPhone: document.getElementById('studentParentPhone').value.trim(),
+    address: document.getElementById('studentAddress').value.trim(),
+    batchId: document.getElementById('studentBatch').value,
+    admissionDate: document.getElementById('studentAdmissionDate').value || todayStr(),
+    totalFee: Number(document.getElementById('studentTotalFee').value || 0),
+    notes: document.getElementById('studentNotes').value.trim()
+  };
+  await dbPut('students', student);
+
+  const advance = Number(document.getElementById('studentAdvanceFee').value || 0);
+  if (isNew && advance > 0){
+    await dbPut('payments', {
+      id: uid(), studentId: id, amount: advance, date: student.admissionDate,
+      mode: 'Cash', note: 'Advance fee at admission'
+    });
+  }
+
+  closeModal('studentModal');
+  renderStudentList();
+  renderDashboard();
+}
+
+function studentListItemHTML(s, batches){
+  return '<div class="list-item" onclick="openStudentDetail(\'' + s.id + '\')">' +
+    '<div class="avatar">' + initials(s.name) + '</div>' +
+    '<div class="info"><div class="name">' + escapeHtml(s.name) + '</div>' +
+    '<div class="meta">' + escapeHtml(s.phone||'') + '</div></div>' +
+  '</div>';
+}
+
+async function renderStudentList(){
+  const [students, batches, payments] = await Promise.all([dbGetAll('students'), dbGetAll('batches'), dbGetAll('payments')]);
+  const q = (document.getElementById('studentSearch').value || '').toLowerCase();
+  const filtered = students.filter(s => !q || s.name.toLowerCase().includes(q) || (s.phone||'').includes(q));
+  filtered.sort((a,b)=> a.name.localeCompare(b.name));
+
+  const el = document.getElementById('studentList');
+  if (!filtered.length){
+    el.innerHTML = '<div class="empty-state"><div class="big">🎓</div>No students found. Tap "+ New Admission" to add one.</div>';
+    return;
+  }
+
+  const rows = await Promise.all(filtered.map(async s => {
+    const bal = await getStudentBalance(s.id, students, payments);
+    const bname = await batchNameById(s.batchId, batches);
+    const badge = bal.balance > 0 ? '<span class="badge due">'+money(bal.balance)+' due</span>' : '<span class="badge paid">Paid up</span>';
+    return '<div class="list-item" onclick="openStudentDetail(\'' + s.id + '\')">' +
+      '<div class="avatar">' + initials(s.name) + '</div>' +
+      '<div class="info"><div class="name">' + escapeHtml(s.name) + '</div><div class="meta">' + escapeHtml(bname) + '</div></div>' +
+      badge +
+    '</div>';
+  }));
+  el.innerHTML = rows.join('');
+}
+
+async function openStudentDetail(id){
+  const [students, batches, payments] = await Promise.all([dbGetAll('students'), dbGetAll('batches'), dbGetAll('payments')]);
+  const s = students.find(x => x.id === id);
+  if (!s) return;
+  const bal = await getStudentBalance(id, students, payments);
+  const bname = await batchNameById(s.batchId, batches);
+  const myPayments = payments.filter(p => p.studentId === id).sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+
+  document.getElementById('detailStudentName').textContent = s.name;
+  document.getElementById('studentDetailBody').innerHTML = `
+    <div class="card" style="margin-bottom:10px;">
+      <div class="hint" style="margin:0 0 8px;">
+        📞 ${escapeHtml(s.phone||'—')} &nbsp;·&nbsp; Parent: ${escapeHtml(s.parentPhone||'—')}<br>
+        📍 ${escapeHtml(s.address||'—')}<br>
+        🏫 ${escapeHtml(bname)} &nbsp;·&nbsp; Admitted ${escapeHtml(s.admissionDate||'—')}
+      </div>
+      <div class="stat-grid" style="margin-bottom:0;">
+        <div class="stat-card"><div class="label">Total Fee</div><div class="value num">${money(bal.total)}</div></div>
+        <div class="stat-card good"><div class="label">Paid</div><div class="value num">${money(bal.paid)}</div></div>
+        <div class="stat-card ${bal.balance>0?'warn':'good'}"><div class="label">Balance</div><div class="value num">${money(bal.balance)}</div></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary small" onclick='closeModal("studentDetailModal"); openStudentForm(${JSON.stringify(s)})'>✏️ Edit</button>
+        <button class="btn rust small" onclick="deleteStudent('${id}')">🗑 Delete</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Payment History</h3>
+      <div>${myPayments.length ? myPayments.map(p => `
+        <div class="list-item" style="cursor:default;">
+          <div class="info"><div class="name num">${money(p.amount)}</div><div class="meta">${escapeHtml(p.date)} · ${escapeHtml(p.mode)} ${p.note?('· '+escapeHtml(p.note)):''}</div></div>
+          <button class="btn ghost small" onclick="printReceipt('${p.id}')">🧾</button>
+        </div>`).join('') : '<div class="empty-state">No payments recorded yet.</div>'}</div>
+    </div>
+  `;
+  openModalEl('studentDetailModal');
+}
+
+async function deleteStudent(id){
+  if (!confirm('Delete this student and their payment history? This cannot be undone.')) return;
+  await dbDelete('students', id);
+  const payments = await dbGetAll('payments');
+  for (const p of payments.filter(p => p.studentId === id)) await dbDelete('payments', p.id);
+  closeModal('studentDetailModal');
+  renderStudentList();
+  renderDashboard();
+}
+
+/* =========================================================
+   FEES
+   ========================================================= */
+async function renderFeesView(){
+  const [students, payments] = await Promise.all([dbGetAll('students'), dbGetAll('payments')]);
+  const sel = document.getElementById('feePaymentStudent');
+  sel.innerHTML = students.length ? students.map(s => '<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>').join('') : '<option value="">No students yet</option>';
+  document.getElementById('feePaymentDate').value = todayStr();
+
+  const list = [...payments].sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  const el = document.getElementById('paymentsList');
+  if (!list.length){
+    el.innerHTML = '<div class="empty-state"><div class="big">💳</div>No payments recorded yet.</div>';
+    return;
+  }
+  el.innerHTML = list.map(p => {
+    const s = students.find(x => x.id === p.studentId);
+    return '<div class="list-item" style="cursor:default;">' +
+      '<div class="info"><div class="name">' + escapeHtml(s ? s.name : 'Unknown student') + ' <span class="num">'+money(p.amount)+'</span></div>' +
+      '<div class="meta">' + escapeHtml(p.date) + ' · ' + escapeHtml(p.mode) + (p.note?(' · '+escapeHtml(p.note)):'') + '</div></div>' +
+      '<button class="btn ghost small" onclick="printReceipt(\'' + p.id + '\')">🧾</button>' +
+    '</div>';
+  }).join('');
+}
+
+async function recordPayment(){
+  const studentId = document.getElementById('feePaymentStudent').value;
+  const amount = Number(document.getElementById('feePaymentAmount').value || 0);
+  if (!studentId){ alert('Add a student first'); return; }
+  if (amount <= 0){ alert('Enter a valid amount'); return; }
+
+  const payment = {
+    id: uid(), studentId, amount,
+    date: document.getElementById('feePaymentDate').value || todayStr(),
+    mode: document.getElementById('feePaymentMode').value,
+    note: document.getElementById('feePaymentNote').value.trim()
+  };
+  await dbPut('payments', payment);
+  document.getElementById('feePaymentAmount').value = '';
+  document.getElementById('feePaymentNote').value = '';
+  renderFeesView();
+  renderDashboard();
+  printReceipt(payment.id);
+}
+
+async function printReceipt(paymentId){
+  const [students, payments] = await Promise.all([dbGetAll('students'), dbGetAll('payments')]);
+  const p = payments.find(x => x.id === paymentId);
+  if (!p) return;
+  const s = students.find(x => x.id === p.studentId);
+  const bal = await getStudentBalance(p.studentId, students, payments);
+
+  document.getElementById('receiptBody').innerHTML = `
+    <div class="r-head">
+      <div class="rname">${escapeHtml(SETTINGS.coachingName)}</div>
+      <div>${escapeHtml(SETTINGS.address||'')}</div>
+      <div>${escapeHtml(SETTINGS.phone||'')}</div>
+    </div>
+    <div class="r-row"><span>Receipt No.</span><span>${p.id.slice(-6).toUpperCase()}</span></div>
+    <div class="r-row"><span>Date</span><span>${escapeHtml(p.date)}</span></div>
+    <div class="r-row"><span>Student</span><span>${escapeHtml(s?s.name:'—')}</span></div>
+    <div class="r-row"><span>Mode</span><span>${escapeHtml(p.mode)}</span></div>
+    ${p.note ? `<div class="r-row"><span>Note</span><span>${escapeHtml(p.note)}</span></div>` : ''}
+    <div class="r-row"><span>Amount Received</span><span>${money(p.amount)}</span></div>
+    <div class="r-row"><span>Total Course Fee</span><span>${money(bal.total)}</span></div>
+    <div class="r-row"><span>Total Paid Till Date</span><span>${money(bal.paid)}</span></div>
+    <div class="r-total"><span>Balance Due</span><span>${money(bal.balance)}</span></div>
+  `;
+  openModalEl('receiptModal');
+}
+
+/* =========================================================
+   ATTENDANCE
+   ========================================================= */
+async function renderAttendanceSheet(){
+  const [batches, students] = await Promise.all([dbGetAll('batches'), dbGetAll('students')]);
+  const batchSel = document.getElementById('attendanceBatch');
+  if (!batchSel.dataset.filled){
+    batchSel.innerHTML = batches.length ? batches.map(b => '<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('') : '<option value="">Add a batch first</option>';
+    batchSel.dataset.filled = '1';
+  }
+  if (!document.getElementById('attendanceDate').value) document.getElementById('attendanceDate').value = todayStr();
+
+  const batchId = batchSel.value;
+  const date = document.getElementById('attendanceDate').value;
+  const roster = students.filter(s => s.batchId === batchId);
+  const sheetEl = document.getElementById('attendanceSheet');
+
+  if (!roster.length){
+    sheetEl.innerHTML = '<div class="empty-state"><div class="big">📋</div>No students in this batch yet.</div>';
+    return;
+  }
+
+  const records = await dbGetAll('attendance');
+  const todayRecords = {};
+  records.filter(r => r.batchId === batchId && r.date === date).forEach(r => todayRecords[r.studentId] = r.status);
+
+  sheetEl.innerHTML = roster.map(s => {
+    const status = todayRecords[s.id] || '';
+    return '<div class="att-row"><span>' + escapeHtml(s.name) + '</span>' +
+      '<div class="att-toggle">' +
+        '<button class="p ' + (status==='present'?'active':'') + '" onclick="markAttendance(\''+s.id+'\',\''+batchId+'\',\''+date+'\',\'present\')">Present</button>' +
+        '<button class="a ' + (status==='absent'?'active':'') + '" onclick="markAttendance(\''+s.id+'\',\''+batchId+'\',\''+date+'\',\'absent\')">Absent</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+async function markAttendance(studentId, batchId, date, status){
+  const records = await dbGetAll('attendance');
+  const existing = records.find(r => r.studentId===studentId && r.batchId===batchId && r.date===date);
+  const rec = existing || {id: uid(), studentId, batchId, date};
+  rec.status = status;
+  await dbPut('attendance', rec);
+  renderAttendanceSheet();
+}
+
+/* =========================================================
+   BATCHES
+   ========================================================= */
+async function addBatch(){
+  const name = document.getElementById('batchName').value.trim();
+  if (!name){ alert('Enter a batch name'); return; }
+  const batch = {
+    id: uid(), name,
+    fee: Number(document.getElementById('batchFee').value || 0),
+    startDate: document.getElementById('batchStartDate').value || todayStr(),
+    schedule: document.getElementById('batchSchedule').value.trim()
+  };
+  await dbPut('batches', batch);
+  document.getElementById('batchName').value = '';
+  document.getElementById('batchFee').value = '';
+  document.getElementById('batchSchedule').value = '';
+  renderBatchList();
+}
+
+async function renderBatchList(){
+  const [batches, students] = await Promise.all([dbGetAll('batches'), dbGetAll('students')]);
+  const el = document.getElementById('batchList');
+  if (!batches.length){
+    el.innerHTML = '<div class="empty-state"><div class="big">🏫</div>No batches yet.</div>';
+    return;
+  }
+  el.innerHTML = batches.map(b => {
+    const count = students.filter(s => s.batchId === b.id).length;
+    return '<div class="list-item" style="cursor:default;">' +
+      '<div class="info"><div class="name">' + escapeHtml(b.name) + '</div>' +
+      '<div class="meta">' + count + ' student(s) · ' + money(b.fee) + ' · ' + escapeHtml(b.schedule||'No schedule set') + '</div></div>' +
+      '<button class="btn rust small" onclick="deleteBatch(\'' + b.id + '\')">🗑</button>' +
+    '</div>';
+  }).join('');
+}
+
+async function deleteBatch(id){
+  if (!confirm('Delete this batch? Students already in it will keep their records but show no batch.')) return;
+  await dbDelete('batches', id);
+  renderBatchList();
+}
+
+/* =========================================================
+   SETTINGS
+   ========================================================= */
+async function loadSettings(){
+  const s = await dbGet('settings', 'main');
+  if (s) SETTINGS = s;
+  document.getElementById('settingCoachingName').value = SETTINGS.coachingName || '';
+  document.getElementById('settingAddress').value = SETTINGS.address || '';
+  document.getElementById('settingPhone').value = SETTINGS.phone || '';
+  applySettingsToHeader();
+}
+
+function applySettingsToHeader(){
+  document.getElementById('coachingNameDisplay').textContent = SETTINGS.coachingName || 'Coaching Manager';
+  document.getElementById('brandInitial').textContent = (SETTINGS.coachingName||'C').trim()[0].toUpperCase();
+}
+
+async function saveSettings(){
+  SETTINGS = {
+    key: 'main',
+    coachingName: document.getElementById('settingCoachingName').value.trim() || 'Coaching Manager',
+    address: document.getElementById('settingAddress').value.trim(),
+    phone: document.getElementById('settingPhone').value.trim()
+  };
+  await dbPut('settings', SETTINGS);
+  applySettingsToHeader();
+  alert('Settings saved.');
+}
+
+/* =========================================================
+   Backup / Restore
+   ========================================================= */
+async function exportBackup(){
+  const data = {
+    students: await dbGetAll('students'),
+    batches: await dbGetAll('batches'),
+    payments: await dbGetAll('payments'),
+    attendance: await dbGetAll('attendance'),
+    settings: SETTINGS,
+    exportedAt: new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'coaching-backup-' + todayStr() + '.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function restoreBackup(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!confirm('This will add all records from the backup file. Continue?')) return;
+    for (const s of (data.students||[])) await dbPut('students', s);
+    for (const b of (data.batches||[])) await dbPut('batches', b);
+    for (const p of (data.payments||[])) await dbPut('payments', p);
+    for (const a of (data.attendance||[])) await dbPut('attendance', a);
+    if (data.settings){ SETTINGS = {...data.settings, key:'main'}; await dbPut('settings', SETTINGS); }
+    alert('Backup restored successfully.');
+    loadSettings();
+    renderDashboard();
+  } catch(err){
+    alert('Could not read this backup file.');
+  }
+  e.target.value = '';
+}
+
+/* =========================================================
+   Init
+   ========================================================= */
+(async function init(){
+  db = await openDB();
+  await loadSettings();
+  renderDashboard();
+
+  if (window.matchMedia('(display-mode: standalone)').matches === false){
+    document.getElementById('installBanner').classList.add('show');
+  }
+  if ('serviceWorker' in navigator){
+    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+  }
+})();
+</script>
+</body>
+</html>
