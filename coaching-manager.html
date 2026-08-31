@@ -191,6 +191,9 @@
   table.ledger-table tr.charge td{color:var(--rust);}
   table.ledger-table tr.payment td{color:var(--sage);}
   table.ledger-table td.bal{font-weight:700;color:var(--navy);}
+  table.ledger-table tr.reversed td{text-decoration:line-through;color:var(--ink-soft)!important;opacity:.65;}
+  .status-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;margin-left:6px;}
+  .status-tag.reversed{background:var(--rust-bg);color:var(--rust);}
 
   /* ---------- Attendance grid ---------- */
   .att-row{
@@ -250,7 +253,11 @@
     <div class="stat-grid">
       <div class="stat-card"><div class="label">Total Students</div><div class="value num" id="statStudents">0</div></div>
       <div class="stat-card good"><div class="label">Collected</div><div class="value num" id="statCollected">₹0</div></div>
-      <div class="stat-card warn"><div class="label">Pending Dues</div><div class="value num" id="statPending">₹0</div></div>
+      <div class="stat-card warn" id="pendingDuesCard" onclick="togglePendingView()" style="cursor:pointer;">
+        <div class="label" id="pendingDuesLabel">Pending Dues (Completed Months)</div>
+        <div class="value num" id="statPending">₹0</div>
+        <div class="hint" style="margin:2px 0 0;">Tap to toggle</div>
+      </div>
       <div class="stat-card"><div class="label">Active Batches</div><div class="value num" id="statBatches">0</div></div>
     </div>
 
@@ -271,6 +278,14 @@
       <button class="btn primary" onclick="openStudentForm()">+ New Admission</button>
     </div>
     <input type="text" class="search-box" id="studentSearch" placeholder="Search by name or phone..." oninput="renderStudentList()">
+    <div class="row2" style="margin-bottom:12px;">
+      <select id="filterBatch" onchange="renderStudentList()"><option value="">All Batches</option></select>
+      <select id="filterFeeStatus" onchange="renderStudentList()">
+        <option value="">All Fee Status</option>
+        <option value="due">Pending Dues Only</option>
+        <option value="paid">Paid Up Only</option>
+      </select>
+    </div>
     <div id="studentList"></div>
   </section>
 
@@ -319,7 +334,8 @@
   <!-- ============ BATCHES ============ -->
   <section class="view" id="view-batches">
     <div class="card">
-      <h3>Add a Batch / Course</h3>
+      <h3 id="batchFormTitle">Add a Batch / Course</h3>
+      <input type="hidden" id="batchId">
       <label>Batch Name</label>
       <input type="text" id="batchName" placeholder="e.g. Class 10 Foundation — Morning">
       <div class="row2">
@@ -329,7 +345,8 @@
       <label>Schedule / Timing (optional)</label>
       <input type="text" id="batchSchedule" placeholder="e.g. Mon–Sat, 4:00–6:00 PM">
       <div class="btn-row">
-        <button class="btn primary" onclick="addBatch()">+ Add Batch</button>
+        <button class="btn primary" id="batchSaveBtn" onclick="addBatch()">+ Add Batch</button>
+        <button class="btn ghost" id="batchCancelBtn" style="display:none;" onclick="cancelBatchEdit()">Cancel</button>
       </div>
     </div>
     <div class="card">
@@ -344,7 +361,7 @@
       <h3>Coaching Details</h3>
       <p class="hint">Shown on the app header and on printed fee receipts.</p>
       <label>Coaching Name</label>
-      <input type="text" id="settingCoachingName" placeholder="e.g. Sankalp Coaching Classes">
+      <input type="text" id="settingCoachingName" placeholder="e.g. Pragya Coaching Classes">
       <label>Address</label>
       <input type="text" id="settingAddress" placeholder="e.g. Near Bus Stand, Sector 12">
       <label>Contact Number</label>
@@ -365,7 +382,7 @@
     </div>
   </section>
 
-  <footer>Sankalp Coaching Manager · All data stored privately on this device</footer>
+  <footer>Pragya Coaching Manager · All data stored privately on this device</footer>
 </main>
 
 <!-- Student Admission / Edit Modal -->
@@ -377,8 +394,10 @@
     <input type="text" id="studentName" placeholder="Full name">
     <div class="row2">
       <div><label>Phone</label><input type="tel" id="studentPhone" placeholder="Student's number"></div>
-      <div><label>Parent's Phone</label><input type="tel" id="studentParentPhone" placeholder="Parent's number"></div>
+      <div><label>Guardian / Parent Name</label><input type="text" id="studentGuardianName" placeholder="Father's / Mother's name"></div>
     </div>
+    <label>Parent's Phone</label>
+    <input type="tel" id="studentParentPhone" placeholder="Parent's number">
     <label>Address</label>
     <input type="text" id="studentAddress" placeholder="Optional">
     <div class="row2">
@@ -428,6 +447,28 @@
     <div class="printable" id="printArea"><div class="receipt" id="receiptBody"></div></div>
     <div class="btn-row">
       <button class="btn brass block" onclick="window.print()">🖨 Print / Save as PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Payment Modal -->
+<div class="modal-overlay" id="paymentEditModal">
+  <div class="modal-sheet">
+    <div class="modal-head"><h3>Edit Payment</h3><button class="close-x" onclick="closeModal('paymentEditModal')">✕</button></div>
+    <input type="hidden" id="editPaymentId">
+    <p class="hint">Fix a mistaken amount, date, or mode here. To undo a payment entirely instead, use "Reverse" from the payment list — that keeps a record instead of erasing it.</p>
+    <div class="row2">
+      <div><label>Amount (₹)</label><input type="number" id="editPaymentAmount"></div>
+      <div><label>Date</label><input type="date" id="editPaymentDate"></div>
+    </div>
+    <label>Mode</label>
+    <select id="editPaymentMode">
+      <option>Cash</option><option>UPI</option><option>Bank Transfer</option><option>Cheque</option>
+    </select>
+    <label>Note (optional)</label>
+    <input type="text" id="editPaymentNote">
+    <div class="btn-row">
+      <button class="btn primary block" onclick="savePaymentEdit()">💾 Save Changes</button>
     </div>
   </div>
 </div>
@@ -535,26 +576,61 @@ function fmtMonthYear(d){
    on the admission date and repeating every month up to today, interleaved
    with every payment on record, with a running balance — this is the
    single source of truth for "how much does this student owe right now". */
-function generateLedger(student, payments){
+/* Splits a student's fee timeline into monthly billing cycles from their
+   admission date up to `asOf`. Each cycle only counts as a real charge
+   once it has fully elapsed — the current, still-running cycle is kept
+   separate as a "partial" (day-wise, prorated) amount instead of being
+   added to the main balance immediately. */
+function getFeeCycles(student, asOf){
   const effectiveFee = Math.max(0, Number(student.monthlyFee||0) - Number(student.discount||0));
-  const entries = [];
+  const cycles = [];
+  if (!student.admissionDate || effectiveFee <= 0) return { cycles, effectiveFee, current: null };
 
-  if (student.admissionDate && effectiveFee > 0){
-    const admission = new Date(student.admissionDate + 'T00:00:00');
-    const today = new Date(); today.setHours(0,0,0,0);
-    let i = 0;
-    while (i < 600){
-      const chargeDate = addMonthsClamped(admission, i);
-      if (chargeDate > today) break;
-      entries.push({ date: chargeDate, type:'charge', amount: effectiveFee, label: 'Monthly Fee — ' + fmtMonthYear(chargeDate) });
-      i++;
-    }
+  const admission = new Date(student.admissionDate + 'T00:00:00');
+  let i = 0;
+  while (i < 600){
+    const start = addMonthsClamped(admission, i);
+    if (start > asOf) break;
+    const end = addMonthsClamped(admission, i + 1);
+    cycles.push({ start, end, complete: end <= asOf });
+    i++;
   }
 
+  const current = cycles.length && !cycles[cycles.length-1].complete ? cycles[cycles.length-1] : null;
+  return { cycles, effectiveFee, current };
+}
+
+/* Day-wise prorated amount for the current, still-in-progress month —
+   e.g. ₹300/month, 15 of 30 days elapsed in the running cycle → ₹150.
+   This is always shown separately and never folded into the official
+   ledger/balance until that month fully completes. */
+function getPartialAmount(student, asOf){
+  const { effectiveFee, current } = getFeeCycles(student, asOf);
+  if (!current) return { amount: 0, daysElapsed: 0, daysInCycle: 0 };
+  const daysInCycle = Math.round((current.end - current.start) / 86400000);
+  const daysElapsed = Math.round((asOf - current.start) / 86400000);
+  const amount = daysInCycle > 0 ? Math.round(effectiveFee * daysElapsed / daysInCycle) : 0;
+  return { amount, daysElapsed, daysInCycle, cycleLabel: fmtMonthYear(current.start) };
+}
+
+function generateLedger(student, payments, asOf){
+  asOf = asOf || (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+  const { cycles, effectiveFee } = getFeeCycles(student, asOf);
+  const entries = [];
+
+  cycles.filter(c => c.complete).forEach(c => {
+    entries.push({ date: c.start, type:'charge', amount: effectiveFee, label: 'Monthly Fee — ' + fmtMonthYear(c.start) });
+  });
+
   payments.filter(p => p.studentId === student.id).forEach(p => {
+    const isReversed = p.status === 'reversed';
     entries.push({
-      date: new Date(p.date + 'T00:00:01'), type:'payment', amount: Number(p.amount||0),
-      label: (p.mode||'Payment') + (p.note?(' — '+p.note):''), paymentId: p.id
+      date: new Date(p.date + 'T00:00:01'),
+      type: 'payment',
+      amount: Number(p.amount||0),
+      label: (p.mode||'Payment') + (p.note?(' — '+p.note):'') + (isReversed ? '  [REVERSED — ' + (p.reversedReason||'no reason given') + ']' : ''),
+      paymentId: p.id,
+      reversed: isReversed
     });
   });
 
@@ -563,18 +639,19 @@ function generateLedger(student, payments){
   let balance = 0, totalCharged = 0, totalPaid = 0;
   entries.forEach(e => {
     if (e.type === 'charge'){ balance += e.amount; totalCharged += e.amount; }
-    else { balance -= e.amount; totalPaid += e.amount; }
+    else if (!e.reversed){ balance -= e.amount; totalPaid += e.amount; }
     e.balance = balance;
   });
 
-  return { entries, totalCharged, totalPaid, balance, effectiveFee };
+  const partial = getPartialAmount(student, asOf);
+  return { entries, totalCharged, totalPaid, balance, effectiveFee, partial };
 }
 
 async function getStudentBalance(studentId, students, payments){
   const student = students.find(s => s.id === studentId);
-  if (!student) return {total:0, paid:0, balance:0};
+  if (!student) return {total:0, paid:0, balance:0, partial:0};
   const ledger = generateLedger(student, payments);
-  return { total: ledger.totalCharged, paid: ledger.totalPaid, balance: Math.max(0, ledger.balance) };
+  return { total: ledger.totalCharged, paid: ledger.totalPaid, balance: Math.max(0, ledger.balance), partial: ledger.partial.amount };
 }
 
 async function batchNameById(id, batches){
@@ -585,21 +662,42 @@ async function batchNameById(id, batches){
 /* =========================================================
    DASHBOARD
    ========================================================= */
+let pendingViewMode = 'completed'; // 'completed' | 'partial'
+let lastDashboardData = null;
+
+function togglePendingView(){
+  pendingViewMode = pendingViewMode === 'completed' ? 'partial' : 'completed';
+  updatePendingDuesDisplay();
+}
+
+function updatePendingDuesDisplay(){
+  if (!lastDashboardData) return;
+  if (pendingViewMode === 'completed'){
+    document.getElementById('pendingDuesLabel').textContent = 'Pending Dues (Completed Months)';
+    document.getElementById('statPending').textContent = money(lastDashboardData.totalPendingCompleted);
+  } else {
+    document.getElementById('pendingDuesLabel').textContent = 'Pending Dues (Incl. Today, Day-wise)';
+    document.getElementById('statPending').textContent = money(lastDashboardData.totalPendingWithPartial);
+  }
+}
+
 async function renderDashboard(){
   const [students, payments, batches] = await Promise.all([dbGetAll('students'), dbGetAll('payments'), dbGetAll('batches')]);
 
   document.getElementById('statStudents').textContent = students.length;
-  const totalCollected = payments.reduce((a,p)=>a+Number(p.amount||0),0);
+  const totalCollected = payments.filter(p => p.status !== 'reversed').reduce((a,p)=>a+Number(p.amount||0),0);
   document.getElementById('statCollected').textContent = money(totalCollected);
 
-  let totalPending = 0;
+  let totalPendingCompleted = 0, totalPendingWithPartial = 0;
   const duesRows = [];
   for (const s of students){
     const bal = await getStudentBalance(s.id, students, payments);
-    totalPending += bal.balance;
+    totalPendingCompleted += bal.balance;
+    totalPendingWithPartial += bal.balance + bal.partial;
     if (bal.balance > 0) duesRows.push({student:s, balance:bal.balance});
   }
-  document.getElementById('statPending').textContent = money(totalPending);
+  lastDashboardData = { totalPendingCompleted, totalPendingWithPartial };
+  updatePendingDuesDisplay();
   document.getElementById('statBatches').textContent = batches.length;
 
   const recent = [...students].sort((a,b)=> (b.admissionDate||'').localeCompare(a.admissionDate||'')).slice(0,5);
@@ -649,6 +747,7 @@ async function openStudentForm(existing){
   document.getElementById('studentId').value = existing ? existing.id : '';
   document.getElementById('studentName').value = existing ? existing.name : '';
   document.getElementById('studentPhone').value = existing ? existing.phone : '';
+  document.getElementById('studentGuardianName').value = existing ? (existing.guardianName||'') : '';
   document.getElementById('studentParentPhone').value = existing ? existing.parentPhone : '';
   document.getElementById('studentAddress').value = existing ? existing.address : '';
   document.getElementById('studentAdmissionDate').value = existing ? existing.admissionDate : todayStr();
@@ -670,6 +769,7 @@ async function saveStudent(){
     id,
     name,
     phone: document.getElementById('studentPhone').value.trim(),
+    guardianName: document.getElementById('studentGuardianName').value.trim(),
     parentPhone: document.getElementById('studentParentPhone').value.trim(),
     address: document.getElementById('studentAddress').value.trim(),
     batchId: document.getElementById('studentBatch').value,
@@ -703,27 +803,126 @@ function studentListItemHTML(s, batches){
 
 async function renderStudentList(){
   const [students, batches, payments] = await Promise.all([dbGetAll('students'), dbGetAll('batches'), dbGetAll('payments')]);
+
+  const batchFilterEl = document.getElementById('filterBatch');
+  if (!batchFilterEl.dataset.filled){
+    const sortedBatches = [...batches].sort((a,b)=>a.name.localeCompare(b.name));
+    batchFilterEl.innerHTML = '<option value="">All Batches</option>' + sortedBatches.map(b => '<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('');
+    batchFilterEl.dataset.filled = '1';
+  }
+
   const q = (document.getElementById('studentSearch').value || '').toLowerCase();
-  const filtered = students.filter(s => !q || s.name.toLowerCase().includes(q) || (s.phone||'').includes(q));
+  const batchFilter = document.getElementById('filterBatch').value;
+  const feeStatusFilter = document.getElementById('filterFeeStatus').value;
+
+  let filtered = students.filter(s => !q || s.name.toLowerCase().includes(q) || (s.phone||'').includes(q));
+  if (batchFilter) filtered = filtered.filter(s => s.batchId === batchFilter);
   filtered.sort((a,b)=> a.name.localeCompare(b.name));
 
   const el = document.getElementById('studentList');
-  if (!filtered.length){
-    el.innerHTML = '<div class="empty-state"><div class="big">🎓</div>No students found. Tap "+ New Admission" to add one.</div>';
+
+  const rowsData = await Promise.all(filtered.map(async s => {
+    const bal = await getStudentBalance(s.id, students, payments);
+    const bname = await batchNameById(s.batchId, batches);
+    return { s, bal, bname };
+  }));
+
+  let visible = rowsData;
+  if (feeStatusFilter === 'due') visible = visible.filter(r => r.bal.balance > 0);
+  if (feeStatusFilter === 'paid') visible = visible.filter(r => r.bal.balance <= 0);
+
+  if (!visible.length){
+    el.innerHTML = '<div class="empty-state"><div class="big">🎓</div>No students match these filters.</div>';
     return;
   }
 
-  const rows = await Promise.all(filtered.map(async s => {
-    const bal = await getStudentBalance(s.id, students, payments);
-    const bname = await batchNameById(s.batchId, batches);
+  el.innerHTML = visible.map(({s, bal, bname}) => {
     const badge = bal.balance > 0 ? '<span class="badge due">'+money(bal.balance)+' due</span>' : '<span class="badge paid">Paid up</span>';
     return '<div class="list-item" onclick="openStudentDetail(\'' + s.id + '\')">' +
       '<div class="avatar">' + initials(s.name) + '</div>' +
       '<div class="info"><div class="name">' + escapeHtml(s.name) + '</div><div class="meta">' + escapeHtml(bname) + '</div></div>' +
       badge +
     '</div>';
-  }));
-  el.innerHTML = rows.join('');
+  }).join('');
+}
+
+function paymentRowHTML(p){
+  const isReversed = p.status === 'reversed';
+  return `
+    <div class="list-item" style="cursor:default;${isReversed?'opacity:.6;':''}">
+      <div class="info">
+        <div class="name num" style="${isReversed?'text-decoration:line-through;':''}">${money(p.amount)}${isReversed?'<span class="status-tag reversed">Reversed</span>':''}</div>
+        <div class="meta">${escapeHtml(p.date)} · ${escapeHtml(p.mode)} ${p.note?('· '+escapeHtml(p.note)):''}${isReversed && p.reversedReason ? ('<br>↩ '+escapeHtml(p.reversedReason)) : ''}</div>
+      </div>
+      ${isReversed ? `
+        <button class="btn ghost small" onclick="restorePayment('${p.id}')">↺ Restore</button>
+      ` : `
+        <button class="btn ghost small" onclick="printReceipt('${p.id}')">🧾</button>
+        <button class="btn ghost small" onclick="openPaymentEdit('${p.id}')">✏️</button>
+        <button class="btn rust small" onclick="reversePayment('${p.id}')">↩️ Reverse</button>
+      `}
+    </div>`;
+}
+
+async function openPaymentEdit(paymentId){
+  const payments = await dbGetAll('payments');
+  const p = payments.find(x => x.id === paymentId);
+  if (!p) return;
+  document.getElementById('editPaymentId').value = p.id;
+  document.getElementById('editPaymentAmount').value = p.amount;
+  document.getElementById('editPaymentDate').value = p.date;
+  document.getElementById('editPaymentMode').value = p.mode || 'Cash';
+  document.getElementById('editPaymentNote').value = p.note || '';
+  openModalEl('paymentEditModal');
+}
+
+async function savePaymentEdit(){
+  const id = document.getElementById('editPaymentId').value;
+  const payments = await dbGetAll('payments');
+  const p = payments.find(x => x.id === id);
+  if (!p) return;
+  const amount = Number(document.getElementById('editPaymentAmount').value || 0);
+  if (amount <= 0){ alert('Enter a valid amount'); return; }
+  p.amount = amount;
+  p.date = document.getElementById('editPaymentDate').value || p.date;
+  p.mode = document.getElementById('editPaymentMode').value;
+  p.note = document.getElementById('editPaymentNote').value.trim();
+  await dbPut('payments', p);
+  closeModal('paymentEditModal');
+  refreshAfterPaymentChange(p.studentId);
+}
+
+async function reversePayment(paymentId){
+  const reason = prompt('Why is this payment being reversed? (e.g. "Entered by mistake", "Wrong student")');
+  if (reason === null) return; // cancelled
+  const payments = await dbGetAll('payments');
+  const p = payments.find(x => x.id === paymentId);
+  if (!p) return;
+  p.status = 'reversed';
+  p.reversedReason = reason.trim() || 'No reason given';
+  p.reversedAt = todayStr();
+  await dbPut('payments', p);
+  refreshAfterPaymentChange(p.studentId);
+}
+
+async function restorePayment(paymentId){
+  if (!confirm('Restore this payment? It will count towards the balance again.')) return;
+  const payments = await dbGetAll('payments');
+  const p = payments.find(x => x.id === paymentId);
+  if (!p) return;
+  delete p.status;
+  delete p.reversedReason;
+  delete p.reversedAt;
+  await dbPut('payments', p);
+  refreshAfterPaymentChange(p.studentId);
+}
+
+async function refreshAfterPaymentChange(studentId){
+  renderDashboard();
+  const feesView = document.getElementById('view-fees');
+  if (feesView.classList.contains('active')) renderFeesView();
+  const detailModal = document.getElementById('studentDetailModal');
+  if (detailModal.classList.contains('show') && studentId) openStudentDetail(studentId);
 }
 
 async function openStudentDetail(id){
@@ -738,11 +937,19 @@ async function openStudentDetail(id){
     ? money(s.monthlyFee) + '/mo, discount ' + money(s.discount) + ' → ' + money(effectiveFee) + '/mo'
     : money(effectiveFee) + '/month';
 
+  const today = new Date(); today.setHours(0,0,0,0);
+  const partial = getPartialAmount(s, today);
+  const partialBox = partial.daysInCycle > 0 ? `
+    <div class="card" style="margin-bottom:10px;background:var(--paper-deep);">
+      <div class="hint" style="margin:0;">📆 <strong>This month so far (Day ${partial.daysElapsed} of ${partial.daysInCycle}):</strong> a running, day-wise estimate of ₹${partial.amount.toLocaleString('en-IN')} for ${escapeHtml(partial.cycleLabel)} — not yet added to the balance above; it becomes an official charge once the month completes.</div>
+    </div>` : '';
+
   document.getElementById('detailStudentName').textContent = s.name;
   document.getElementById('studentDetailBody').innerHTML = `
     <div class="card" style="margin-bottom:10px;">
       <div class="hint" style="margin:0 0 8px;">
-        📞 ${escapeHtml(s.phone||'—')} &nbsp;·&nbsp; Parent: ${escapeHtml(s.parentPhone||'—')}<br>
+        📞 ${escapeHtml(s.phone||'—')}<br>
+        👪 ${escapeHtml(s.guardianName||'—')} &nbsp;·&nbsp; ${escapeHtml(s.parentPhone||'—')}<br>
         📍 ${escapeHtml(s.address||'—')}<br>
         🏫 ${escapeHtml(bname)} &nbsp;·&nbsp; Admitted ${escapeHtml(s.admissionDate||'—')}<br>
         💵 ${feeLine}
@@ -758,15 +965,20 @@ async function openStudentDetail(id){
         <button class="btn rust small" onclick="deleteStudent('${id}')">🗑 Delete</button>
       </div>
     </div>
+    ${partialBox}
+    <div class="card">
+      <h3>Attendance</h3>
+      <div id="studentAttendanceSummary">Loading…</div>
+      <div class="btn-row">
+        <button class="btn brass small" onclick="shareAttendance('${id}')">📤 Share with Parent</button>
+      </div>
+    </div>
     <div class="card">
       <h3>Payment History</h3>
-      <div>${myPayments.length ? myPayments.map(p => `
-        <div class="list-item" style="cursor:default;">
-          <div class="info"><div class="name num">${money(p.amount)}</div><div class="meta">${escapeHtml(p.date)} · ${escapeHtml(p.mode)} ${p.note?('· '+escapeHtml(p.note)):''}</div></div>
-          <button class="btn ghost small" onclick="printReceipt('${p.id}')">🧾</button>
-        </div>`).join('') : '<div class="empty-state">No payments recorded yet.</div>'}</div>
+      <div>${myPayments.length ? myPayments.map(paymentRowHTML).join('') : '<div class="empty-state">No payments recorded yet.</div>'}</div>
     </div>
   `;
+  renderStudentAttendanceSummary(id);
   openModalEl('studentDetailModal');
 }
 
@@ -781,7 +993,7 @@ async function openLedger(id){
   const ledger = generateLedger(s, payments);
 
   const rows = ledger.entries.map(e => `
-    <tr class="${e.type}">
+    <tr class="${e.type}${e.reversed?' reversed':''}">
       <td>${fmtDate(e.date)}</td>
       <td class="desc">${escapeHtml(e.label)}</td>
       <td>${e.type==='charge' ? money(e.amount) : ''}</td>
@@ -806,6 +1018,12 @@ async function openLedger(id){
       <thead><tr><th>Date</th><th>Description</th><th>Charged</th><th>Paid</th><th>Balance</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>` : '<div class="empty-state">No fee activity yet — set the monthly fee and admission date for this student.</div>'}
+    ${ledger.partial.daysInCycle > 0 ? `
+    <div style="margin-top:14px;padding:10px 12px;border:1.5px dashed var(--brass);border-radius:8px;background:var(--paper);">
+      <div style="font-weight:700;color:var(--brass);">Current Month In Progress (not yet due)</div>
+      <div style="font-size:11.5px;margin-top:2px;">Day ${ledger.partial.daysElapsed} of ${ledger.partial.daysInCycle} · ${escapeHtml(ledger.partial.cycleLabel)}</div>
+      <div style="font-size:15px;font-weight:700;margin-top:4px;">${money(ledger.partial.amount)}</div>
+    </div>` : ''}
   `;
   openModalEl('ledgerModal');
 }
@@ -846,8 +1064,9 @@ async function deleteStudent(id){
    ========================================================= */
 async function renderFeesView(){
   const [students, payments] = await Promise.all([dbGetAll('students'), dbGetAll('payments')]);
+  const sortedStudents = [...students].sort((a,b)=> a.name.localeCompare(b.name));
   const sel = document.getElementById('feePaymentStudent');
-  sel.innerHTML = students.length ? students.map(s => '<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>').join('') : '<option value="">No students yet</option>';
+  sel.innerHTML = sortedStudents.length ? sortedStudents.map(s => '<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>').join('') : '<option value="">No students yet</option>';
   document.getElementById('feePaymentDate').value = todayStr();
 
   const list = [...payments].sort((a,b)=> (b.date||'').localeCompare(a.date||''));
@@ -892,6 +1111,8 @@ async function printReceipt(paymentId){
   if (!p) return;
   const s = students.find(x => x.id === p.studentId);
   const bal = await getStudentBalance(p.studentId, students, payments);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const partial = s ? getPartialAmount(s, today) : {amount:0, daysInCycle:0};
 
   document.getElementById('receiptBody').innerHTML = `
     <div class="r-head">
@@ -908,8 +1129,84 @@ async function printReceipt(paymentId){
     <div class="r-row"><span>Total Charged Till Date</span><span>${money(bal.total)}</span></div>
     <div class="r-row"><span>Total Paid Till Date</span><span>${money(bal.paid)}</span></div>
     <div class="r-total"><span>Balance Due</span><span>${money(bal.balance)}</span></div>
+    ${partial.daysInCycle > 0 ? `
+    <div style="margin-top:10px;padding:8px 10px;border:1px dashed var(--brass);border-radius:6px;font-size:11.5px;">
+      <div>Current Month (Day ${partial.daysElapsed} of ${partial.daysInCycle}) — not yet due</div>
+      <div style="font-weight:700;margin-top:2px;">${money(partial.amount)}</div>
+    </div>` : ''}
   `;
   openModalEl('receiptModal');
+}
+
+/* =========================================================
+   STUDENT ATTENDANCE SUMMARY (profile view)
+   ========================================================= */
+async function renderStudentAttendanceSummary(studentId){
+  const records = (await dbGetAll('attendance')).filter(r => r.studentId === studentId);
+  const el = document.getElementById('studentAttendanceSummary');
+  if (!el) return;
+
+  if (!records.length){
+    el.innerHTML = '<div class="empty-state" style="padding:16px;">No attendance marked yet.</div>';
+    return;
+  }
+
+  const presentCount = records.filter(r => r.status === 'present').length;
+  const absentCount = records.filter(r => r.status === 'absent').length;
+  const pct = records.length ? Math.round((presentCount / records.length) * 100) : 0;
+
+  const byDate = {};
+  records.forEach(r => { byDate[r.date] = r.status; });
+
+  const days = [];
+  const cursor = new Date(); cursor.setHours(0,0,0,0);
+  for (let i = 29; i >= 0; i--){
+    const d = new Date(cursor);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0,10);
+    days.push({ date: d, status: byDate[key] || null });
+  }
+
+  const dots = days.map(d => {
+    const color = d.status === 'present' ? 'var(--sage)' : d.status === 'absent' ? 'var(--rust)' : 'var(--line)';
+    const title = fmtDate(d.date) + ': ' + (d.status ? (d.status==='present'?'Present':'Absent') : 'Not marked');
+    return `<span title="${title}" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${color};margin:1.5px;"></span>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="stat-grid" style="margin-bottom:10px;">
+      <div class="stat-card good"><div class="label">Present</div><div class="value num">${presentCount}</div></div>
+      <div class="stat-card warn"><div class="label">Absent</div><div class="value num">${absentCount}</div></div>
+      <div class="stat-card"><div class="label">Attendance</div><div class="value num">${pct}%</div></div>
+    </div>
+    <div class="hint" style="margin:0 0 4px;">Last 30 days</div>
+    <div style="line-height:1;">${dots}</div>
+  `;
+}
+
+async function shareAttendance(studentId){
+  const [students, records] = await Promise.all([dbGetAll('students'), dbGetAll('attendance')]);
+  const s = students.find(x => x.id === studentId);
+  if (!s) return;
+  const myRecords = records.filter(r => r.studentId === studentId).sort((a,b)=> a.date.localeCompare(b.date));
+  if (!myRecords.length){ alert('No attendance marked yet for this student.'); return; }
+
+  const presentCount = myRecords.filter(r => r.status === 'present').length;
+  const absentCount = myRecords.filter(r => r.status === 'absent').length;
+  const pct = Math.round((presentCount / myRecords.length) * 100);
+
+  let text = `${SETTINGS.coachingName}\nAttendance Summary — ${s.name}\n\nPresent: ${presentCount}\nAbsent: ${absentCount}\nAttendance: ${pct}%\n\nRecent days:\n`;
+  myRecords.slice(-14).forEach(r => {
+    text += `${r.date}  ${r.status === 'present' ? 'Present ✓' : 'Absent ✗'}\n`;
+  });
+
+  if (navigator.share){
+    try { await navigator.share({ title: 'Attendance — ' + s.name, text }); return; } catch(e){}
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    try { await navigator.clipboard.writeText(text); alert('Attendance summary copied — paste it into WhatsApp or a message.'); return; } catch(e){}
+  }
+  alert(text);
 }
 
 /* =========================================================
@@ -963,17 +1260,39 @@ async function markAttendance(studentId, batchId, date, status){
 async function addBatch(){
   const name = document.getElementById('batchName').value.trim();
   if (!name){ alert('Enter a batch name'); return; }
+  const existingId = document.getElementById('batchId').value;
   const batch = {
-    id: uid(), name,
+    id: existingId || uid(), name,
     fee: Number(document.getElementById('batchFee').value || 0),
     startDate: document.getElementById('batchStartDate').value || todayStr(),
     schedule: document.getElementById('batchSchedule').value.trim()
   };
   await dbPut('batches', batch);
+  cancelBatchEdit();
+  renderBatchList();
+}
+
+function editBatch(batch){
+  document.getElementById('batchFormTitle').textContent = 'Edit Batch / Course';
+  document.getElementById('batchId').value = batch.id;
+  document.getElementById('batchName').value = batch.name;
+  document.getElementById('batchFee').value = batch.fee;
+  document.getElementById('batchStartDate').value = batch.startDate;
+  document.getElementById('batchSchedule').value = batch.schedule || '';
+  document.getElementById('batchSaveBtn').textContent = '💾 Save Changes';
+  document.getElementById('batchCancelBtn').style.display = 'inline-flex';
+  document.getElementById('view-batches').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function cancelBatchEdit(){
+  document.getElementById('batchFormTitle').textContent = 'Add a Batch / Course';
+  document.getElementById('batchId').value = '';
   document.getElementById('batchName').value = '';
   document.getElementById('batchFee').value = '';
+  document.getElementById('batchStartDate').value = '';
   document.getElementById('batchSchedule').value = '';
-  renderBatchList();
+  document.getElementById('batchSaveBtn').textContent = '+ Add Batch';
+  document.getElementById('batchCancelBtn').style.display = 'none';
 }
 
 async function renderBatchList(){
@@ -988,6 +1307,7 @@ async function renderBatchList(){
     return '<div class="list-item" style="cursor:default;">' +
       '<div class="info"><div class="name">' + escapeHtml(b.name) + '</div>' +
       '<div class="meta">' + count + ' student(s) · ' + money(b.fee) + ' · ' + escapeHtml(b.schedule||'No schedule set') + '</div></div>' +
+      '<button class="btn ghost small" onclick=\'editBatch(' + JSON.stringify(b) + ')\'>✏️</button>' +
       '<button class="btn rust small" onclick="deleteBatch(\'' + b.id + '\')">🗑</button>' +
     '</div>';
   }).join('');
@@ -1075,6 +1395,8 @@ async function restoreBackup(e){
   db = await openDB();
   await loadSettings();
   renderDashboard();
+
+  document.addEventListener('contextmenu', e => e.preventDefault());
 
   if (window.matchMedia('(display-mode: standalone)').matches === false){
     document.getElementById('installBanner').classList.add('show');
