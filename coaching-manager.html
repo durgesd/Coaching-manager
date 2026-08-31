@@ -323,8 +323,14 @@
   <!-- ============ ATTENDANCE ============ -->
   <section class="view" id="view-attendance">
     <div class="card">
-      <label>Batch</label>
-      <select id="attendanceBatch" onchange="renderAttendanceSheet()"></select>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn primary small" id="attModeBatchBtn" onclick="setAttendanceMode('batch')">📚 By Batch</button>
+        <button class="btn ghost small" id="attModeAllBtn" onclick="setAttendanceMode('all')">🔤 All Students (A–Z)</button>
+      </div>
+      <div id="attendanceBatchPicker" style="margin-top:10px;">
+        <label>Batch</label>
+        <select id="attendanceBatch" onchange="renderAttendanceSheet()"></select>
+      </div>
       <label>Date</label>
       <input type="date" id="attendanceDate" onchange="renderAttendanceSheet()">
     </div>
@@ -467,6 +473,9 @@
     </select>
     <label>Note (optional)</label>
     <input type="text" id="editPaymentNote">
+    <label>Reason for This Edit <span style="color:var(--rust);">*</span></label>
+    <input type="text" id="editPaymentReason" placeholder="e.g. Amount entered wrong, was ₹500 not ₹5000">
+    <p class="hint" style="margin:4px 0 0;">Required — this is kept as a permanent record so it's always clear what changed and why.</p>
     <div class="btn-row">
       <button class="btn primary block" onclick="savePaymentEdit()">💾 Save Changes</button>
     </div>
@@ -873,6 +882,7 @@ async function openPaymentEdit(paymentId){
   document.getElementById('editPaymentDate').value = p.date;
   document.getElementById('editPaymentMode').value = p.mode || 'Cash';
   document.getElementById('editPaymentNote').value = p.note || '';
+  document.getElementById('editPaymentReason').value = '';
   openModalEl('paymentEditModal');
 }
 
@@ -881,12 +891,28 @@ async function savePaymentEdit(){
   const payments = await dbGetAll('payments');
   const p = payments.find(x => x.id === id);
   if (!p) return;
+
   const amount = Number(document.getElementById('editPaymentAmount').value || 0);
   if (amount <= 0){ alert('Enter a valid amount'); return; }
+  const reason = document.getElementById('editPaymentReason').value.trim();
+  if (!reason){ alert('Please enter a reason for this edit — it is kept as a permanent record.'); return; }
+
+  const newDate = document.getElementById('editPaymentDate').value || p.date;
+  const newMode = document.getElementById('editPaymentMode').value;
+  const newNote = document.getElementById('editPaymentNote').value.trim();
+
+  if (!p.editHistory) p.editHistory = [];
+  p.editHistory.push({
+    editedAt: todayStr(),
+    reason,
+    previous: { amount: p.amount, date: p.date, mode: p.mode, note: p.note || '' }
+  });
+
   p.amount = amount;
-  p.date = document.getElementById('editPaymentDate').value || p.date;
-  p.mode = document.getElementById('editPaymentMode').value;
-  p.note = document.getElementById('editPaymentNote').value.trim();
+  p.date = newDate;
+  p.mode = newMode;
+  p.note = newNote;
+
   await dbPut('payments', p);
   closeModal('paymentEditModal');
   refreshAfterPaymentChange(p.studentId);
@@ -1212,6 +1238,16 @@ async function shareAttendance(studentId){
 /* =========================================================
    ATTENDANCE
    ========================================================= */
+let attendanceMode = 'batch'; // 'batch' | 'all'
+
+function setAttendanceMode(mode){
+  attendanceMode = mode;
+  document.getElementById('attModeBatchBtn').className = 'btn small ' + (mode==='batch' ? 'primary' : 'ghost');
+  document.getElementById('attModeAllBtn').className = 'btn small ' + (mode==='all' ? 'primary' : 'ghost');
+  document.getElementById('attendanceBatchPicker').style.display = mode === 'batch' ? 'block' : 'none';
+  renderAttendanceSheet();
+}
+
 async function renderAttendanceSheet(){
   const [batches, students] = await Promise.all([dbGetAll('batches'), dbGetAll('students')]);
   const batchSel = document.getElementById('attendanceBatch');
@@ -1221,34 +1257,79 @@ async function renderAttendanceSheet(){
   }
   if (!document.getElementById('attendanceDate').value) document.getElementById('attendanceDate').value = todayStr();
 
-  const batchId = batchSel.value;
   const date = document.getElementById('attendanceDate').value;
-  const roster = students.filter(s => s.batchId === batchId);
   const sheetEl = document.getElementById('attendanceSheet');
 
+  let roster;
+  if (attendanceMode === 'all'){
+    roster = [...students].sort((a,b) => a.name.localeCompare(b.name));
+  } else {
+    const batchId = batchSel.value;
+    roster = students.filter(s => s.batchId === batchId);
+  }
+
   if (!roster.length){
-    sheetEl.innerHTML = '<div class="empty-state"><div class="big">📋</div>No students in this batch yet.</div>';
+    sheetEl.innerHTML = '<div class="empty-state"><div class="big">📋</div>' +
+      (attendanceMode === 'all' ? 'No students yet.' : 'No students in this batch yet.') + '</div>';
     return;
   }
 
   const records = await dbGetAll('attendance');
   const todayRecords = {};
-  records.filter(r => r.batchId === batchId && r.date === date).forEach(r => todayRecords[r.studentId] = r.status);
+  records.filter(r => r.date === date).forEach(r => todayRecords[r.studentId] = r.status);
+  const batchNameMap = {}; batches.forEach(b => batchNameMap[b.id] = b.name);
 
-  sheetEl.innerHTML = roster.map(s => {
+  const unmarkedCount = roster.filter(s => !todayRecords[s.id]).length;
+  const presentCount = roster.filter(s => todayRecords[s.id] === 'present').length;
+
+  const rowsHtml = roster.map(s => {
     const status = todayRecords[s.id] || '';
-    return '<div class="att-row"><span>' + escapeHtml(s.name) + '</span>' +
+    const nameLabel = attendanceMode === 'all'
+      ? '<span>' + escapeHtml(s.name) + '<br><span style="font-size:10.5px;color:var(--ink-soft);font-weight:400;">' + escapeHtml(batchNameMap[s.batchId] || 'No batch') + '</span></span>'
+      : '<span>' + escapeHtml(s.name) + '</span>';
+    return '<div class="att-row">' + nameLabel +
       '<div class="att-toggle">' +
-        '<button class="p ' + (status==='present'?'active':'') + '" onclick="markAttendance(\''+s.id+'\',\''+batchId+'\',\''+date+'\',\'present\')">Present</button>' +
-        '<button class="a ' + (status==='absent'?'active':'') + '" onclick="markAttendance(\''+s.id+'\',\''+batchId+'\',\''+date+'\',\'absent\')">Absent</button>' +
+        '<button class="p ' + (status==='present'?'active':'') + '" onclick="markAttendance(\''+s.id+'\',\''+(s.batchId||'')+'\',\''+date+'\',\'present\')">✓ Present</button>' +
+        '<button class="a ' + (status==='absent'?'active':'') + '" onclick="markAttendance(\''+s.id+'\',\''+(s.batchId||'')+'\',\''+date+'\',\'absent\')">Absent</button>' +
       '</div></div>';
   }).join('');
+
+  const bulkBar = unmarkedCount > 0 ? `
+    <div class="card" style="background:var(--paper-deep);">
+      <div class="hint" style="margin:0 0 8px;">✓ ${presentCount} marked Present · <strong>${unmarkedCount} not yet marked</strong> for ${escapeHtml(date)}.</div>
+      <button class="btn rust block" onclick="markRemainingAbsent('${date}')">✅ Mark Remaining ${unmarkedCount} as Absent</button>
+    </div>` : `
+    <div class="card" style="background:var(--sage-bg);">
+      <div class="hint" style="margin:0;color:var(--sage);font-weight:700;">🎉 Everyone marked for ${escapeHtml(date)}.</div>
+    </div>`;
+
+  sheetEl.innerHTML = bulkBar + rowsHtml;
+}
+
+async function markRemainingAbsent(date){
+  const [batches, students] = await Promise.all([dbGetAll('batches'), dbGetAll('students')]);
+  let roster;
+  if (attendanceMode === 'all'){
+    roster = students;
+  } else {
+    const batchId = document.getElementById('attendanceBatch').value;
+    roster = students.filter(s => s.batchId === batchId);
+  }
+  const records = await dbGetAll('attendance');
+  const markedToday = new Set(records.filter(r => r.date === date).map(r => r.studentId));
+  const toMark = roster.filter(s => !markedToday.has(s.id));
+
+  for (const s of toMark){
+    await dbPut('attendance', { id: uid(), studentId: s.id, batchId: s.batchId||'', date, status: 'absent' });
+  }
+  renderAttendanceSheet();
 }
 
 async function markAttendance(studentId, batchId, date, status){
   const records = await dbGetAll('attendance');
-  const existing = records.find(r => r.studentId===studentId && r.batchId===batchId && r.date===date);
-  const rec = existing || {id: uid(), studentId, batchId, date};
+  const existing = records.find(r => r.studentId===studentId && r.date===date);
+  const rec = existing || {id: uid(), studentId, date};
+  rec.batchId = batchId;
   rec.status = status;
   await dbPut('attendance', rec);
   renderAttendanceSheet();
