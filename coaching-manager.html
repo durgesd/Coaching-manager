@@ -194,6 +194,22 @@
   table.ledger-table tr.reversed td{text-decoration:line-through;color:var(--ink-soft)!important;opacity:.65;}
   .status-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;margin-left:6px;}
   .status-tag.reversed{background:var(--rust-bg);color:var(--rust);}
+  .status-tag.edited{background:#FFF2D6;color:var(--brass);}
+
+  /* ---------- Reminders ---------- */
+  .reminder-row{
+    background:var(--card); border:1px solid var(--line); border-radius:11px;
+    padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; gap:10px; cursor:pointer;
+  }
+  .reminder-row.overdue{border-color:var(--rust);background:var(--rust-bg);}
+  .reminder-row.upcoming{border-color:var(--brass);background:#FFF8EA;}
+  .reminder-count{
+    font-family:"JetBrains Mono",monospace; font-weight:800; font-size:20px; flex:none; text-align:center; min-width:52px;
+  }
+  .reminder-count .n{display:block;line-height:1;}
+  .reminder-count .u{font-size:9px;font-weight:700;text-transform:uppercase;color:var(--ink-soft);}
+  .reminder-row.overdue .reminder-count{color:var(--rust);}
+  .reminder-row.upcoming .reminder-count{color:var(--brass);}
 
   /* ---------- Attendance grid ---------- */
   .att-row{
@@ -237,6 +253,7 @@
   <nav>
     <button class="tab-btn active" id="navDashboard" onclick="showView('dashboard')">Dashboard</button>
     <button class="tab-btn" id="navStudents" onclick="showView('students')">Students</button>
+    <button class="tab-btn" id="navReminders" onclick="showView('reminders')">⏰ Reminders</button>
     <button class="tab-btn" id="navFees" onclick="showView('fees')">Fees</button>
     <button class="tab-btn" id="navAttendance" onclick="showView('attendance')">Attendance</button>
     <button class="tab-btn" id="navBatches" onclick="showView('batches')">Batches</button>
@@ -286,7 +303,21 @@
         <option value="paid">Paid Up Only</option>
       </select>
     </div>
+    <select id="filterStatus" onchange="renderStudentList()" style="margin-bottom:12px;">
+      <option value="active">Active Students</option>
+      <option value="left">Left / Dropped Out</option>
+      <option value="all">All Students</option>
+    </select>
     <div id="studentList"></div>
+  </section>
+
+  <!-- ============ REMINDERS ============ -->
+  <section class="view" id="view-reminders">
+    <div class="card">
+      <h3>⏰ Fee Reminders</h3>
+      <p class="hint">Students whose fee is due within 2 days, or already overdue. Overdue counts climb in red every day until payment is recorded.</p>
+    </div>
+    <div id="remindersList"></div>
   </section>
 
   <!-- ============ FEES ============ -->
@@ -297,7 +328,7 @@
       <label>Student</label>
       <select id="feePaymentStudent"></select>
       <div class="row2">
-        <div><label>Amount (₹)</label><input type="number" id="feePaymentAmount" placeholder="0"></div>
+        <div><label>Amount Received (₹)</label><input type="number" id="feePaymentAmount" placeholder="0"></div>
         <div><label>Date</label><input type="date" id="feePaymentDate"></div>
       </div>
       <label>Mode</label>
@@ -309,6 +340,11 @@
       </select>
       <label>Note (optional)</label>
       <input type="text" id="feePaymentNote" placeholder="e.g. Advance fee, 2nd installment">
+      <label>Discount Applied This Time (₹, optional)</label>
+      <input type="number" id="feePaymentDiscount" placeholder="0">
+      <label>Discount Reason</label>
+      <input type="text" id="feePaymentDiscountReason" placeholder="e.g. Missed many classes this month">
+      <p class="hint" style="margin:4px 0 0;">Use this if a parent is paying less than usual for a specific month (e.g. absences) — it reduces the balance just like a payment, but is kept separate from cash collected.</p>
       <div class="btn-row">
         <button class="btn brass" onclick="recordPayment()">💰 Save Payment</button>
       </div>
@@ -326,6 +362,7 @@
       <div class="btn-row" style="margin-top:0;">
         <button class="btn primary small" id="attModeBatchBtn" onclick="setAttendanceMode('batch')">📚 By Batch</button>
         <button class="btn ghost small" id="attModeAllBtn" onclick="setAttendanceMode('all')">🔤 All Students (A–Z)</button>
+        <button class="btn ghost small" id="attModeSummaryBtn" onclick="setAttendanceMode('summary')">👁 View Summary</button>
       </div>
       <div id="attendanceBatchPicker" style="margin-top:10px;">
         <label>Batch</label>
@@ -452,7 +489,7 @@
     <div class="modal-head"><h3>Fee Receipt</h3><button class="close-x" onclick="closeModal('receiptModal')">✕</button></div>
     <div class="printable" id="printArea"><div class="receipt" id="receiptBody"></div></div>
     <div class="btn-row">
-      <button class="btn brass block" onclick="window.print()">🖨 Print / Save as PDF</button>
+      <button class="btn brass block" onclick="printCurrentReceipt()">🖨 Print / Save as PDF</button>
     </div>
   </div>
 </div>
@@ -550,6 +587,7 @@ function showView(name){
 
   if (name === 'dashboard') renderDashboard();
   if (name === 'students') renderStudentList();
+  if (name === 'reminders') renderReminders();
   if (name === 'fees') renderFeesView();
   if (name === 'attendance') renderAttendanceSheet();
   if (name === 'batches') renderBatchList();
@@ -633,27 +671,32 @@ function generateLedger(student, payments, asOf){
 
   payments.filter(p => p.studentId === student.id).forEach(p => {
     const isReversed = p.status === 'reversed';
+    const isDiscount = p.type === 'discount';
     entries.push({
       date: new Date(p.date + 'T00:00:01'),
       type: 'payment',
       amount: Number(p.amount||0),
-      label: (p.mode||'Payment') + (p.note?(' — '+p.note):'') + (isReversed ? '  [REVERSED — ' + (p.reversedReason||'no reason given') + ']' : ''),
+      label: (isDiscount ? 'Discount' : (p.mode||'Payment')) + (p.note?(' — '+p.note):'') + (isReversed ? '  [REVERSED — ' + (p.reversedReason||'no reason given') + ']' : ''),
       paymentId: p.id,
-      reversed: isReversed
+      reversed: isReversed,
+      isDiscount
     });
   });
 
   entries.sort((a,b) => a.date - b.date || (a.type==='charge' ? -1 : 1));
 
-  let balance = 0, totalCharged = 0, totalPaid = 0;
+  let balance = 0, totalCharged = 0, totalPaid = 0, totalDiscounted = 0;
   entries.forEach(e => {
     if (e.type === 'charge'){ balance += e.amount; totalCharged += e.amount; }
-    else if (!e.reversed){ balance -= e.amount; totalPaid += e.amount; }
+    else if (!e.reversed){
+      balance -= e.amount;
+      if (e.isDiscount) totalDiscounted += e.amount; else totalPaid += e.amount;
+    }
     e.balance = balance;
   });
 
   const partial = getPartialAmount(student, asOf);
-  return { entries, totalCharged, totalPaid, balance, effectiveFee, partial };
+  return { entries, totalCharged, totalPaid, totalDiscounted, balance, effectiveFee, partial };
 }
 
 async function getStudentBalance(studentId, students, payments){
@@ -661,6 +704,114 @@ async function getStudentBalance(studentId, students, payments){
   if (!student) return {total:0, paid:0, balance:0, partial:0};
   const ledger = generateLedger(student, payments);
   return { total: ledger.totalCharged, paid: ledger.totalPaid, balance: Math.max(0, ledger.balance), partial: ledger.partial.amount };
+}
+
+/* Works out which monthly cycle(s) a specific payment corresponds to, by
+   walking through this student's real payments in date order and assuming
+   each payment amount represents whole month(s) of fee (rounded to the
+   nearest month). Used to build human-friendly receipt filenames like
+   "vaibhav-july" or "vaibhav-july-august" for a 2-month advance payment. */
+function getMonthsCoveredByPayment(student, allPayments, targetPaymentId){
+  const effectiveFee = Math.max(0, Number(student.monthlyFee||0) - Number(student.discount||0));
+  if (effectiveFee <= 0 || !student.admissionDate) return [];
+  const admission = new Date(student.admissionDate + 'T00:00:00');
+
+  const relevant = allPayments
+    .filter(p => p.studentId === student.id && p.status !== 'reversed' && p.type !== 'discount')
+    .sort((a,b) => (a.date||'').localeCompare(b.date||'') || String(a.id).localeCompare(String(b.id)));
+
+  let monthsSoFar = 0;
+  for (const p of relevant){
+    const monthsCovered = Math.max(1, Math.round(Number(p.amount||0) / effectiveFee));
+    if (p.id === targetPaymentId){
+      const result = [];
+      for (let i = 0; i < monthsCovered; i++) result.push(addMonthsClamped(admission, monthsSoFar + i));
+      return result;
+    }
+    monthsSoFar += monthsCovered;
+  }
+  return [];
+}
+
+function buildReceiptFilename(student, payment, allPayments){
+  const safeName = (student ? student.name : 'receipt').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'receipt';
+  if (!student) return safeName;
+  const months = getMonthsCoveredByPayment(student, allPayments, payment.id);
+  if (!months.length) return safeName + '-receipt';
+  const labels = months.map(d => d.toLocaleDateString('en-US', {month:'long'}).toLowerCase());
+  return safeName + '-' + labels.join('-');
+}
+
+/* Figures out whether a student needs a reminder right now:
+   - 'overdue' (red, counts up every day) if they already have an unpaid
+     completed month on the books
+   - 'upcoming' (amber, counts down) if no balance yet, but their next
+     monthly charge is due within 2 days
+   Returns null if neither applies (nothing to remind about). */
+function getDueInfo(student, payments, asOf){
+  if (student.status === 'left') return null;
+  const effectiveFee = Math.max(0, Number(student.monthlyFee||0) - Number(student.discount||0));
+  if (!student.admissionDate || effectiveFee <= 0) return null;
+
+  const ledger = generateLedger(student, payments, asOf);
+  if (ledger.balance > 0){
+    return { status: 'overdue', days: ledger.partial.daysElapsed || 0, balance: ledger.balance };
+  }
+
+  const { cycles, current } = getFeeCycles(student, asOf);
+  let nextDue;
+  if (current){
+    nextDue = current.end;
+  } else {
+    const admission = new Date(student.admissionDate + 'T00:00:00');
+    nextDue = addMonthsClamped(admission, cycles.length);
+  }
+  const daysUntil = Math.round((nextDue - asOf) / 86400000);
+  if (daysUntil >= 0 && daysUntil <= 2){
+    return { status: 'upcoming', days: daysUntil, balance: 0 };
+  }
+  return null;
+}
+
+async function renderReminders(){
+  const [students, payments] = await Promise.all([dbGetAll('students'), dbGetAll('payments')]);
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  const overdue = [], upcoming = [];
+  students.forEach(s => {
+    const info = getDueInfo(s, payments, today);
+    if (!info) return;
+    if (info.status === 'overdue') overdue.push({ s, info });
+    else upcoming.push({ s, info });
+  });
+
+  overdue.sort((a,b) => b.info.days - a.info.days);
+  upcoming.sort((a,b) => a.info.days - b.info.days);
+
+  const el = document.getElementById('remindersList');
+  if (!overdue.length && !upcoming.length){
+    el.innerHTML = '<div class="empty-state"><div class="big">🎉</div>No reminders right now — everyone is caught up or not yet due.</div>';
+    return;
+  }
+
+  let html = '';
+  if (overdue.length){
+    html += '<h3 style="font-family:\'Fraunces\',serif;color:var(--rust);margin:4px 0 8px;">🔴 Overdue (' + overdue.length + ')</h3>';
+    html += overdue.map(({s, info}) => `
+      <div class="reminder-row overdue" onclick="openStudentDetail('${s.id}')">
+        <div class="reminder-count"><span class="n">${info.days}</span><span class="u">day${info.days===1?'':'s'} late</span></div>
+        <div class="info"><div class="name">${escapeHtml(s.name)}</div><div class="meta">${escapeHtml(s.phone||'')} · Balance ${money(info.balance)}</div></div>
+      </div>`).join('');
+  }
+  if (upcoming.length){
+    html += '<h3 style="font-family:\'Fraunces\',serif;color:var(--brass);margin:16px 0 8px;">🟡 Due Soon (' + upcoming.length + ')</h3>';
+    html += upcoming.map(({s, info}) => `
+      <div class="reminder-row upcoming" onclick="openStudentDetail('${s.id}')">
+        <div class="reminder-count"><span class="n">${info.days}</span><span class="u">day${info.days===1?'':'s'} left</span></div>
+        <div class="info"><div class="name">${escapeHtml(s.name)}</div><div class="meta">${escapeHtml(s.phone||'')} · Next fee due soon</div></div>
+      </div>`).join('');
+  }
+  el.innerHTML = html;
 }
 
 async function batchNameById(id, batches){
@@ -693,8 +844,8 @@ function updatePendingDuesDisplay(){
 async function renderDashboard(){
   const [students, payments, batches] = await Promise.all([dbGetAll('students'), dbGetAll('payments'), dbGetAll('batches')]);
 
-  document.getElementById('statStudents').textContent = students.length;
-  const totalCollected = payments.filter(p => p.status !== 'reversed').reduce((a,p)=>a+Number(p.amount||0),0);
+  document.getElementById('statStudents').textContent = students.filter(s => s.status !== 'left').length;
+  const totalCollected = payments.filter(p => p.status !== 'reversed' && p.type !== 'discount').reduce((a,p)=>a+Number(p.amount||0),0);
   document.getElementById('statCollected').textContent = money(totalCollected);
 
   let totalPendingCompleted = 0, totalPendingWithPartial = 0;
@@ -823,9 +974,12 @@ async function renderStudentList(){
   const q = (document.getElementById('studentSearch').value || '').toLowerCase();
   const batchFilter = document.getElementById('filterBatch').value;
   const feeStatusFilter = document.getElementById('filterFeeStatus').value;
+  const statusFilter = document.getElementById('filterStatus').value;
 
   let filtered = students.filter(s => !q || s.name.toLowerCase().includes(q) || (s.phone||'').includes(q));
   if (batchFilter) filtered = filtered.filter(s => s.batchId === batchFilter);
+  if (statusFilter === 'active') filtered = filtered.filter(s => s.status !== 'left');
+  if (statusFilter === 'left') filtered = filtered.filter(s => s.status === 'left');
   filtered.sort((a,b)=> a.name.localeCompare(b.name));
 
   const el = document.getElementById('studentList');
@@ -846,8 +1000,10 @@ async function renderStudentList(){
   }
 
   el.innerHTML = visible.map(({s, bal, bname}) => {
-    const badge = bal.balance > 0 ? '<span class="badge due">'+money(bal.balance)+' due</span>' : '<span class="badge paid">Paid up</span>';
-    return '<div class="list-item" onclick="openStudentDetail(\'' + s.id + '\')">' +
+    const badge = s.status === 'left'
+      ? (bal.balance > 0 ? '<span class="badge due">Left · '+money(bal.balance)+' due</span>' : '<span class="status-tag" style="background:var(--paper-deep);color:var(--ink-soft);">Left</span>')
+      : (bal.balance > 0 ? '<span class="badge due">'+money(bal.balance)+' due</span>' : '<span class="badge paid">Paid up</span>');
+    return '<div class="list-item" onclick="openStudentDetail(\'' + s.id + '\')" style="'+(s.status==='left'?'opacity:.7;':'')+'">' +
       '<div class="avatar">' + initials(s.name) + '</div>' +
       '<div class="info"><div class="name">' + escapeHtml(s.name) + '</div><div class="meta">' + escapeHtml(bname) + '</div></div>' +
       badge +
@@ -857,16 +1013,20 @@ async function renderStudentList(){
 
 function paymentRowHTML(p){
   const isReversed = p.status === 'reversed';
+  const isEdited = p.editHistory && p.editHistory.length > 0;
+  const isDiscount = p.type === 'discount';
+  const lastEdit = isEdited ? p.editHistory[p.editHistory.length - 1] : null;
+
   return `
     <div class="list-item" style="cursor:default;${isReversed?'opacity:.6;':''}">
       <div class="info">
-        <div class="name num" style="${isReversed?'text-decoration:line-through;':''}">${money(p.amount)}${isReversed?'<span class="status-tag reversed">Reversed</span>':''}</div>
-        <div class="meta">${escapeHtml(p.date)} · ${escapeHtml(p.mode)} ${p.note?('· '+escapeHtml(p.note)):''}${isReversed && p.reversedReason ? ('<br>↩ '+escapeHtml(p.reversedReason)) : ''}</div>
+        <div class="name num" style="${isReversed?'text-decoration:line-through;':''}${isDiscount?'color:var(--brass);':''}">${money(p.amount)}${isDiscount?'<span class="status-tag edited">Discount</span>':''}${isReversed?'<span class="status-tag reversed">Reversed</span>':''}${isEdited?'<span class="status-tag edited">Edited</span>':''}</div>
+        <div class="meta">${escapeHtml(p.date)} ${!isDiscount?('· '+escapeHtml(p.mode)):''} ${p.note?('· '+escapeHtml(p.note)):''}${isReversed && p.reversedReason ? ('<br>↩ '+escapeHtml(p.reversedReason)) : ''}${isEdited ? ('<br>✏️ Was '+money(lastEdit.previous.amount)+' — '+escapeHtml(lastEdit.reason)) : ''}</div>
       </div>
       ${isReversed ? `
         <button class="btn ghost small" onclick="restorePayment('${p.id}')">↺ Restore</button>
       ` : `
-        <button class="btn ghost small" onclick="printReceipt('${p.id}')">🧾</button>
+        ${!isDiscount ? `<button class="btn ghost small" onclick="printReceipt('${p.id}')">🧾</button>` : ''}
         <button class="btn ghost small" onclick="openPaymentEdit('${p.id}')">✏️</button>
         <button class="btn rust small" onclick="reversePayment('${p.id}')">↩️ Reverse</button>
       `}
@@ -965,13 +1125,19 @@ async function openStudentDetail(id){
 
   const today = new Date(); today.setHours(0,0,0,0);
   const partial = getPartialAmount(s, today);
-  const partialBox = partial.daysInCycle > 0 ? `
+  const partialBox = partial.daysInCycle > 0 && s.status !== 'left' ? `
     <div class="card" style="margin-bottom:10px;background:var(--paper-deep);">
       <div class="hint" style="margin:0;">📆 <strong>This month so far (Day ${partial.daysElapsed} of ${partial.daysInCycle}):</strong> a running, day-wise estimate of ₹${partial.amount.toLocaleString('en-IN')} for ${escapeHtml(partial.cycleLabel)} — not yet added to the balance above; it becomes an official charge once the month completes.</div>
     </div>` : '';
 
-  document.getElementById('detailStudentName').textContent = s.name;
+  const leftBanner = s.status === 'left' ? `
+    <div class="card" style="margin-bottom:10px;background:var(--rust-bg);">
+      <div class="hint" style="margin:0;color:var(--rust);font-weight:700;">🚪 This student left on ${escapeHtml(s.leftDate||'—')}.${bal.balance>0 ? ' They still owe '+money(bal.balance)+'.' : ' No pending balance.'}</div>
+    </div>` : '';
+
+  document.getElementById('detailStudentName').textContent = s.name + (s.status === 'left' ? ' (Left)' : '');
   document.getElementById('studentDetailBody').innerHTML = `
+    ${leftBanner}
     <div class="card" style="margin-bottom:10px;">
       <div class="hint" style="margin:0 0 8px;">
         📞 ${escapeHtml(s.phone||'—')}<br>
@@ -988,7 +1154,11 @@ async function openStudentDetail(id){
       <div class="btn-row">
         <button class="btn brass small" onclick="openLedger('${id}')">📒 View Ledger</button>
         <button class="btn primary small" onclick='closeModal("studentDetailModal"); openStudentForm(${JSON.stringify(s)})'>✏️ Edit</button>
-        <button class="btn rust small" onclick="deleteStudent('${id}')">🗑 Delete</button>
+        ${s.status === 'left'
+          ? `<button class="btn sage small" onclick="reactivateStudent('${id}')">↺ Reactivate</button>`
+          : `<button class="btn ghost small" onclick="markStudentLeft('${id}')">🚪 Mark as Left</button>`
+        }
+        <button class="btn rust small" onclick="deleteStudent('${id}')">🗑 Delete Permanently</button>
       </div>
     </div>
     ${partialBox}
@@ -1006,6 +1176,31 @@ async function openStudentDetail(id){
   `;
   renderStudentAttendanceSummary(id);
   openModalEl('studentDetailModal');
+}
+
+async function markStudentLeft(id){
+  const students = await dbGetAll('students');
+  const s = students.find(x => x.id === id);
+  if (!s) return;
+  if (!confirm(s.name + ' will be marked as having left the coaching. They will stay in your records (with any pending fee balance) but will not count as an active student. Continue?')) return;
+  s.status = 'left';
+  s.leftDate = todayStr();
+  await dbPut('students', s);
+  openStudentDetail(id);
+  renderStudentList();
+  renderDashboard();
+}
+
+async function reactivateStudent(id){
+  const students = await dbGetAll('students');
+  const s = students.find(x => x.id === id);
+  if (!s) return;
+  delete s.status;
+  delete s.leftDate;
+  await dbPut('students', s);
+  openStudentDetail(id);
+  renderStudentList();
+  renderDashboard();
 }
 
 let currentLedgerStudentId = null;
@@ -1114,22 +1309,39 @@ async function renderFeesView(){
 async function recordPayment(){
   const studentId = document.getElementById('feePaymentStudent').value;
   const amount = Number(document.getElementById('feePaymentAmount').value || 0);
-  if (!studentId){ alert('Add a student first'); return; }
-  if (amount <= 0){ alert('Enter a valid amount'); return; }
+  const discount = Number(document.getElementById('feePaymentDiscount').value || 0);
+  const discountReason = document.getElementById('feePaymentDiscountReason').value.trim();
+  const date = document.getElementById('feePaymentDate').value || todayStr();
+  const mode = document.getElementById('feePaymentMode').value;
+  const note = document.getElementById('feePaymentNote').value.trim();
 
-  const payment = {
-    id: uid(), studentId, amount,
-    date: document.getElementById('feePaymentDate').value || todayStr(),
-    mode: document.getElementById('feePaymentMode').value,
-    note: document.getElementById('feePaymentNote').value.trim()
-  };
-  await dbPut('payments', payment);
+  if (!studentId){ alert('Add a student first'); return; }
+  if (amount <= 0 && discount <= 0){ alert('Enter a payment amount or a discount amount'); return; }
+  if (discount > 0 && !discountReason){ alert('Please enter a reason for the discount'); return; }
+
+  let paymentRecord = null;
+
+  if (amount > 0){
+    paymentRecord = { id: uid(), studentId, amount, date, mode, note, type: 'payment' };
+    await dbPut('payments', paymentRecord);
+  }
+  if (discount > 0){
+    await dbPut('payments', { id: uid(), studentId, amount: discount, date, mode: 'Discount', note: discountReason, type: 'discount' });
+  }
+
   document.getElementById('feePaymentAmount').value = '';
   document.getElementById('feePaymentNote').value = '';
+  document.getElementById('feePaymentDiscount').value = '';
+  document.getElementById('feePaymentDiscountReason').value = '';
   renderFeesView();
   renderDashboard();
-  printReceipt(payment.id);
+
+  if (paymentRecord) printReceipt(paymentRecord.id);
+  else alert('Discount of ' + money(discount) + ' recorded.');
 }
+
+let currentReceiptFilename = 'receipt';
+let originalDocTitle = document.title;
 
 async function printReceipt(paymentId){
   const [students, payments] = await Promise.all([dbGetAll('students'), dbGetAll('payments')]);
@@ -1140,6 +1352,10 @@ async function printReceipt(paymentId){
   const today = new Date(); today.setHours(0,0,0,0);
   const partial = s ? getPartialAmount(s, today) : {amount:0, daysInCycle:0};
 
+  const monthsCovered = s ? getMonthsCoveredByPayment(s, payments, p.id) : [];
+  const monthsLabel = monthsCovered.map(d => fmtMonthYear(d)).join(', ');
+  currentReceiptFilename = buildReceiptFilename(s, p, payments);
+
   document.getElementById('receiptBody').innerHTML = `
     <div class="r-head">
       <div class="rname">${escapeHtml(SETTINGS.coachingName)}</div>
@@ -1149,6 +1365,7 @@ async function printReceipt(paymentId){
     <div class="r-row"><span>Receipt No.</span><span>${p.id.slice(-6).toUpperCase()}</span></div>
     <div class="r-row"><span>Date</span><span>${escapeHtml(p.date)}</span></div>
     <div class="r-row"><span>Student</span><span>${escapeHtml(s?s.name:'—')}</span></div>
+    ${monthsLabel ? `<div class="r-row"><span>Fee For</span><span>${escapeHtml(monthsLabel)}</span></div>` : ''}
     <div class="r-row"><span>Mode</span><span>${escapeHtml(p.mode)}</span></div>
     ${p.note ? `<div class="r-row"><span>Note</span><span>${escapeHtml(p.note)}</span></div>` : ''}
     <div class="r-row"><span>Amount Received</span><span>${money(p.amount)}</span></div>
@@ -1163,6 +1380,13 @@ async function printReceipt(paymentId){
   `;
   openModalEl('receiptModal');
 }
+
+function printCurrentReceipt(){
+  document.title = currentReceiptFilename;
+  window.print();
+}
+window.addEventListener('afterprint', () => { document.title = originalDocTitle; });
+
 
 /* =========================================================
    STUDENT ATTENDANCE SUMMARY (profile view)
@@ -1238,26 +1462,59 @@ async function shareAttendance(studentId){
 /* =========================================================
    ATTENDANCE
    ========================================================= */
-let attendanceMode = 'batch'; // 'batch' | 'all'
+let attendanceMode = 'batch'; // 'batch' | 'all' | 'summary'
 
 function setAttendanceMode(mode){
   attendanceMode = mode;
   document.getElementById('attModeBatchBtn').className = 'btn small ' + (mode==='batch' ? 'primary' : 'ghost');
   document.getElementById('attModeAllBtn').className = 'btn small ' + (mode==='all' ? 'primary' : 'ghost');
+  document.getElementById('attModeSummaryBtn').className = 'btn small ' + (mode==='summary' ? 'primary' : 'ghost');
   document.getElementById('attendanceBatchPicker').style.display = mode === 'batch' ? 'block' : 'none';
   renderAttendanceSheet();
 }
 
+async function renderAttendanceSummaryForDate(date){
+  const [students, records] = await Promise.all([dbGetAll('students'), dbGetAll('attendance')]);
+  const todayRecords = records.filter(r => r.date === date);
+  const studentMap = {}; students.forEach(s => studentMap[s.id] = s);
+
+  const present = todayRecords.filter(r => r.status === 'present' && studentMap[r.studentId]).map(r => studentMap[r.studentId]).sort((a,b)=>a.name.localeCompare(b.name));
+  const absent = todayRecords.filter(r => r.status === 'absent' && studentMap[r.studentId]).map(r => studentMap[r.studentId]).sort((a,b)=>a.name.localeCompare(b.name));
+
+  const sheetEl = document.getElementById('attendanceSheet');
+  if (!present.length && !absent.length){
+    sheetEl.innerHTML = '<div class="empty-state"><div class="big">📋</div>No attendance was marked for ' + escapeHtml(date) + '.</div>';
+    return;
+  }
+
+  sheetEl.innerHTML = `
+    <div class="card">
+      <h3 style="color:var(--sage);">✅ Present (${present.length})</h3>
+      <div>${present.length ? present.map(s => '<div class="list-item" style="cursor:default;"><div class="info"><div class="name">'+escapeHtml(s.name)+'</div></div></div>').join('') : '<div class="hint">None marked present.</div>'}</div>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--rust);">❌ Absent (${absent.length})</h3>
+      <div>${absent.length ? absent.map(s => '<div class="list-item" style="cursor:default;"><div class="info"><div class="name">'+escapeHtml(s.name)+'</div></div></div>').join('') : '<div class="hint">None marked absent.</div>'}</div>
+    </div>
+  `;
+}
+
 async function renderAttendanceSheet(){
+  if (!document.getElementById('attendanceDate').value) document.getElementById('attendanceDate').value = todayStr();
+  const date = document.getElementById('attendanceDate').value;
+
+  if (attendanceMode === 'summary'){
+    await renderAttendanceSummaryForDate(date);
+    return;
+  }
+
   const [batches, students] = await Promise.all([dbGetAll('batches'), dbGetAll('students')]);
   const batchSel = document.getElementById('attendanceBatch');
   if (!batchSel.dataset.filled){
     batchSel.innerHTML = batches.length ? batches.map(b => '<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('') : '<option value="">Add a batch first</option>';
     batchSel.dataset.filled = '1';
   }
-  if (!document.getElementById('attendanceDate').value) document.getElementById('attendanceDate').value = todayStr();
 
-  const date = document.getElementById('attendanceDate').value;
   const sheetEl = document.getElementById('attendanceSheet');
 
   let roster;
