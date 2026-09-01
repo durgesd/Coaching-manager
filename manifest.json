@@ -1,14 +1,22 @@
 {
+  "id": "/coaching-manager.html",
   "name": "Pragya Coaching Manager",
   "short_name": "Pragya Coaching",
-  "description": "Student admissions, advance fee tracking, and attendance for Pragya Coaching",
+  "description": "Student admissions, monthly fee tracking with automatic due calculation, attendance, and fee reminders for Pragya Coaching Classes.",
   "start_url": "./coaching-manager.html",
+  "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#F7F5EF",
   "theme_color": "#1B2A4A",
   "orientation": "portrait",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "categories": ["education", "business", "productivity"],
   "icons": [
     { "src": "icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any" }
+    { "src": "icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-192-maskable.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "maskable" },
+    { "src": "icon-512-maskable.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
   ]
 }

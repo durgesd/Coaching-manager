@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
     --navy:#1B2A4A;
@@ -423,6 +424,25 @@
         <input type="file" id="restoreFile" accept="application/json" style="display:none;" onchange="restoreBackup(event)">
       </div>
     </div>
+
+    <div class="card">
+      <h3>☁️ Automatic Google Drive Backup</h3>
+      <p class="hint">Once connected, a backup is saved to a folder in your Google Drive automatically whenever you open the app (if today's backup isn't there yet), and backups older than 2 days are deleted automatically.</p>
+      <div id="driveStatus" class="hint" style="margin:0 0 10px;font-weight:700;color:var(--ink-soft);">Checking status…</div>
+      <label>Google OAuth Client ID <span style="color:var(--rust);">*</span></label>
+      <input type="text" id="driveClientId" placeholder="xxxxxxxx.apps.googleusercontent.com">
+      <p class="hint" style="margin:4px 0 0;">One-time setup — see the instructions your coaching admin was given for how to get this ID from Google Cloud Console.</p>
+      <div class="btn-row">
+        <button class="btn primary small" onclick="saveDriveClientId()">💾 Save Client ID</button>
+        <button class="btn brass small" id="driveConnectBtn" onclick="connectGoogleDrive()">🔗 Connect Google Drive</button>
+        <button class="btn ghost small" id="driveBackupNowBtn" style="display:none;" onclick="runDriveBackupNow()">☁️ Backup Now</button>
+        <button class="btn rust small" id="driveDisconnectBtn" style="display:none;" onclick="disconnectGoogleDrive()">Disconnect</button>
+      </div>
+      <label style="margin-top:14px;display:flex;align-items:center;gap:8px;font-weight:600;">
+        <input type="checkbox" id="driveAutoBackupToggle" onchange="toggleDriveAutoBackup()" style="width:auto;">
+        Auto-backup when app opens
+      </label>
+    </div>
   </section>
 
   <footer>Pragya Coaching Manager · All data stored privately on this device</footer>
@@ -591,6 +611,7 @@ function showView(name){
   if (name === 'fees') renderFeesView();
   if (name === 'attendance') renderAttendanceSheet();
   if (name === 'batches') renderBatchList();
+  if (name === 'settings') updateDriveStatusUI();
 }
 
 function closeModal(id){ document.getElementById(id).classList.remove('show'); }
@@ -1690,8 +1711,8 @@ async function saveSettings(){
 /* =========================================================
    Backup / Restore
    ========================================================= */
-async function exportBackup(){
-  const data = {
+async function buildBackupData(){
+  return {
     students: await dbGetAll('students'),
     batches: await dbGetAll('batches'),
     payments: await dbGetAll('payments'),
@@ -1699,6 +1720,10 @@ async function exportBackup(){
     settings: SETTINGS,
     exportedAt: new Date().toISOString()
   };
+}
+
+async function exportBackup(){
+  const data = await buildBackupData();
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1717,7 +1742,7 @@ async function restoreBackup(e){
     for (const b of (data.batches||[])) await dbPut('batches', b);
     for (const p of (data.payments||[])) await dbPut('payments', p);
     for (const a of (data.attendance||[])) await dbPut('attendance', a);
-    if (data.settings){ SETTINGS = {...data.settings, key:'main'}; await dbPut('settings', SETTINGS); }
+    if (data.settings){ SETTINGS = {...SETTINGS, ...data.settings, key:'main'}; await dbPut('settings', SETTINGS); }
     alert('Backup restored successfully.');
     loadSettings();
     renderDashboard();
@@ -1725,6 +1750,215 @@ async function restoreBackup(e){
     alert('Could not read this backup file.');
   }
   e.target.value = '';
+}
+
+/* =========================================================
+   Google Drive Auto-Backup
+   ========================================================= */
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_FOLDER_NAME = 'Pragya Coaching Backups';
+const DRIVE_KEEP_DAYS = 2;
+
+let driveTokenClient = null;
+let driveAccessToken = null;
+
+function initDriveTokenClient(){
+  if (!window.google || !SETTINGS.driveClientId) return;
+  try {
+    driveTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: SETTINGS.driveClientId,
+      scope: DRIVE_SCOPE,
+      callback: () => {} // overridden per-call below
+    });
+  } catch(e){
+    driveTokenClient = null;
+  }
+}
+
+function requestDriveToken(interactive){
+  return new Promise((resolve, reject) => {
+    if (!driveTokenClient){ reject(new Error('Drive not set up')); return; }
+    driveTokenClient.callback = (resp) => {
+      if (resp && resp.access_token){ driveAccessToken = resp.access_token; resolve(resp.access_token); }
+      else reject(new Error('No access token'));
+    };
+    try {
+      driveTokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+    } catch(e){ reject(e); }
+  });
+}
+
+async function getValidDriveAccessToken(interactive){
+  if (driveAccessToken){
+    // quick check: try a lightweight call; if it fails we'll refresh below
+    return driveAccessToken;
+  }
+  return await requestDriveToken(interactive);
+}
+
+async function driveApiFetch(url, options, interactive){
+  let token = await getValidDriveAccessToken(interactive);
+  let res = await fetch(url, { ...options, headers: { ...(options&&options.headers), Authorization: 'Bearer ' + token } });
+  if (res.status === 401){
+    driveAccessToken = null;
+    token = await requestDriveToken(interactive);
+    res = await fetch(url, { ...options, headers: { ...(options&&options.headers), Authorization: 'Bearer ' + token } });
+  }
+  return res;
+}
+
+async function findOrCreateBackupFolder(){
+  if (SETTINGS.driveFolderId) return SETTINGS.driveFolderId;
+
+  const q = encodeURIComponent(`name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const searchRes = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {}, true);
+  const searchData = await searchRes.json();
+  if (searchData.files && searchData.files.length){
+    SETTINGS.driveFolderId = searchData.files[0].id;
+  } else {
+    const createRes = await driveApiFetch('https://www.googleapis.com/drive/v3/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: DRIVE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+    }, true);
+    const createData = await createRes.json();
+    SETTINGS.driveFolderId = createData.id;
+  }
+  await dbPut('settings', SETTINGS);
+  return SETTINGS.driveFolderId;
+}
+
+async function uploadBackupToDrive(folderId){
+  const data = await buildBackupData();
+  const filename = 'coaching-backup-' + todayStr() + '.json';
+  const metadata = { name: filename, parents: [folderId] };
+  const boundary = '-------pragyacoachingbackup';
+  const body =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(data, null, 2)}\r\n` +
+    `--${boundary}--`;
+
+  const res = await driveApiFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body
+  }, false);
+  if (!res.ok) throw new Error('Upload failed');
+  return filename;
+}
+
+async function deleteOldBackupsFromDrive(folderId){
+  const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
+  const res = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {}, false);
+  const data = await res.json();
+  const files = (data.files || []);
+
+  const cutoff = new Date(); cutoff.setHours(0,0,0,0); cutoff.setDate(cutoff.getDate() - DRIVE_KEEP_DAYS);
+
+  for (const f of files){
+    const m = f.name.match(/coaching-backup-(\d{4}-\d{2}-\d{2})\.json/);
+    if (!m) continue;
+    const fileDate = new Date(m[1] + 'T00:00:00');
+    if (fileDate < cutoff){
+      await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${f.id}`, { method: 'DELETE' }, false);
+    }
+  }
+}
+
+async function connectGoogleDrive(){
+  if (!SETTINGS.driveClientId){ alert('Enter and save your Google OAuth Client ID first.'); return; }
+  if (!driveTokenClient) initDriveTokenClient();
+  try {
+    await requestDriveToken(true);
+    await runDriveBackupNow();
+  } catch(e){
+    alert('Could not connect to Google Drive. Check your Client ID and try again.');
+  }
+  updateDriveStatusUI();
+}
+
+function disconnectGoogleDrive(){
+  if (driveAccessToken && window.google && google.accounts && google.accounts.oauth2){
+    google.accounts.oauth2.revoke(driveAccessToken, () => {});
+  }
+  driveAccessToken = null;
+  updateDriveStatusUI();
+}
+
+async function runDriveBackupNow(){
+  const statusEl = document.getElementById('driveStatus');
+  try {
+    if (statusEl) statusEl.textContent = '☁️ Backing up…';
+    const folderId = await findOrCreateBackupFolder();
+    await uploadBackupToDrive(folderId);
+    await deleteOldBackupsFromDrive(folderId);
+    SETTINGS.driveLastBackupDate = todayStr();
+    await dbPut('settings', SETTINGS);
+    updateDriveStatusUI();
+  } catch(e){
+    if (statusEl) statusEl.textContent = '⚠️ Backup failed — try Connect again.';
+  }
+}
+
+async function runAutoBackupIfNeeded(){
+  if (!SETTINGS.driveClientId || !SETTINGS.driveAutoBackupEnabled) return;
+  if (SETTINGS.driveLastBackupDate === todayStr()) return;
+  if (!window.google) return;
+  if (!driveTokenClient) initDriveTokenClient();
+  try {
+    await requestDriveToken(false); // silent only — won't interrupt the user if consent has expired
+    await runDriveBackupNow();
+  } catch(e){
+    // silent failure is fine — user can tap "Backup Now" manually if needed
+  }
+}
+
+async function saveDriveClientId(){
+  SETTINGS.driveClientId = document.getElementById('driveClientId').value.trim();
+  await dbPut('settings', SETTINGS);
+  initDriveTokenClient();
+  updateDriveStatusUI();
+  alert('Client ID saved.');
+}
+
+async function toggleDriveAutoBackup(){
+  SETTINGS.driveAutoBackupEnabled = document.getElementById('driveAutoBackupToggle').checked;
+  await dbPut('settings', SETTINGS);
+}
+
+function updateDriveStatusUI(){
+  const statusEl = document.getElementById('driveStatus');
+  const connectBtn = document.getElementById('driveConnectBtn');
+  const backupNowBtn = document.getElementById('driveBackupNowBtn');
+  const disconnectBtn = document.getElementById('driveDisconnectBtn');
+  const clientIdInput = document.getElementById('driveClientId');
+  const autoToggle = document.getElementById('driveAutoBackupToggle');
+  if (!statusEl) return;
+
+  clientIdInput.value = SETTINGS.driveClientId || '';
+  autoToggle.checked = !!SETTINGS.driveAutoBackupEnabled;
+
+  if (!SETTINGS.driveClientId){
+    statusEl.textContent = 'Not set up yet — paste your Client ID below to begin.';
+    connectBtn.style.display = 'inline-flex';
+    backupNowBtn.style.display = 'none';
+    disconnectBtn.style.display = 'none';
+    return;
+  }
+
+  if (driveAccessToken){
+    statusEl.textContent = '✓ Connected · Last backup: ' + (SETTINGS.driveLastBackupDate || 'never yet');
+    connectBtn.style.display = 'none';
+    backupNowBtn.style.display = 'inline-flex';
+    disconnectBtn.style.display = 'inline-flex';
+  } else {
+    statusEl.textContent = SETTINGS.driveLastBackupDate
+      ? 'Last backup: ' + SETTINGS.driveLastBackupDate + ' · Tap Connect to reconnect.'
+      : 'Not connected yet — tap Connect to sign in with Google.';
+    connectBtn.style.display = 'inline-flex';
+    backupNowBtn.style.display = 'none';
+    disconnectBtn.style.display = 'none';
+  }
 }
 
 /* =========================================================
@@ -1743,6 +1977,10 @@ async function restoreBackup(e){
   if ('serviceWorker' in navigator){
     navigator.serviceWorker.register('service-worker.js').catch(()=>{});
   }
+
+  if (SETTINGS.driveClientId) initDriveTokenClient();
+  updateDriveStatusUI();
+  setTimeout(runAutoBackupIfNeeded, 1500); // small delay so GIS script has time to load
 })();
 </script>
 </body>
