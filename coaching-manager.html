@@ -1365,6 +1365,7 @@ async function printReceipt(paymentId){
     <div class="r-row"><span>Receipt No.</span><span>${p.id.slice(-6).toUpperCase()}</span></div>
     <div class="r-row"><span>Date</span><span>${escapeHtml(p.date)}</span></div>
     <div class="r-row"><span>Student</span><span>${escapeHtml(s?s.name:'—')}</span></div>
+    <div class="r-row"><span>Admission Date</span><span>${escapeHtml(s?s.admissionDate:'—')}</span></div>
     ${monthsLabel ? `<div class="r-row"><span>Fee For</span><span>${escapeHtml(monthsLabel)}</span></div>` : ''}
     <div class="r-row"><span>Mode</span><span>${escapeHtml(p.mode)}</span></div>
     ${p.note ? `<div class="r-row"><span>Note</span><span>${escapeHtml(p.note)}</span></div>` : ''}
