@@ -1,4 +1,4 @@
-const CACHE_NAME = 'coaching-manager-v2';
+const CACHE_NAME = 'coaching-manager-v3';
 const FILES_TO_CACHE = [
   './coaching-manager.html',
   './manifest.json',
@@ -24,8 +24,18 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+/* Network-first: always try to fetch the latest version first (so app
+   updates show up immediately), and only fall back to the cached copy
+   when there's no internet connection. This avoids ever getting stuck
+   showing an old cached version after the app has been updated. */
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    fetch(event.request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
