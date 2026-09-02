@@ -30,6 +30,13 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;overscroll-behavior-y:contain;}
   body{
+    -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none;
+  }
+  input, textarea, select{
+    -webkit-user-select:text; user-select:text;
+  }
+  body{
     font-family:"Inter",-apple-system,Segoe UI,sans-serif;
     background:var(--paper);
     color:var(--ink);
@@ -1999,7 +2006,11 @@ function updateDriveStatusUI(){
   await loadSettings();
   renderDashboard();
 
-  document.addEventListener('contextmenu', e => e.preventDefault());
+  document.addEventListener('contextmenu', e => {
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return; // allow copy/cut/paste inside fields
+    e.preventDefault();
+  });
 
   if (window.matchMedia('(display-mode: standalone)').matches === false){
     document.getElementById('installBanner').classList.add('show');
