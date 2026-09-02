@@ -174,13 +174,53 @@
 
   /* ---------- Receipt ---------- */
   .receipt{
-    background:#fff; border:1.5px dashed var(--brass); border-radius:10px; padding:18px;
-    font-family:"JetBrains Mono",monospace; font-size:12.5px; color:var(--ink);
+    background:#fff; border-radius:14px; overflow:hidden;
+    font-family:"Inter",sans-serif; color:var(--ink);
+    border:1px solid var(--line);
   }
-  .receipt .r-head{text-align:center;margin-bottom:12px;}
-  .receipt .r-head .rname{font-family:"Fraunces",serif;font-weight:700;font-size:16px;color:var(--navy);}
-  .receipt .r-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dotted var(--line);}
-  .receipt .r-total{display:flex;justify-content:space-between;padding-top:8px;margin-top:6px;border-top:1.5px solid var(--ink);font-weight:700;}
+  .receipt .r-band{
+    background:linear-gradient(160deg, var(--navy) 0%, var(--navy-deep) 100%);
+    color:#fff; text-align:center; padding:18px 16px 14px;
+  }
+  .receipt .r-band .rname{font-family:"Fraunces",serif;font-weight:700;font-size:18px;}
+  .receipt .r-band .rsub{font-size:11px;color:rgba(255,255,255,.75);margin-top:3px;}
+  .receipt .r-title{
+    text-align:center;font-family:"Fraunces",serif;font-weight:600;font-size:12px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--brass);padding:10px 0 0;
+  }
+  .receipt .r-hero{
+    text-align:center; padding:14px 16px 16px;
+  }
+  .receipt .r-hero .hlabel{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em;font-weight:700;}
+  .receipt .r-hero .hamount{
+    font-family:"JetBrains Mono",monospace;font-weight:700;font-size:34px;color:var(--sage);margin:2px 0;
+  }
+  .receipt .r-hero .hmeta{font-size:11.5px;color:var(--ink-soft);}
+  .receipt .r-grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:12px;
+    padding:0 16px 14px;border-bottom:1px solid var(--line);
+  }
+  .receipt .r-grid .glabel{font-size:10px;color:var(--ink-soft);text-transform:uppercase;font-weight:700;letter-spacing:.04em;}
+  .receipt .r-grid .gvalue{font-size:13.5px;font-weight:600;color:var(--ink);margin-top:1px;}
+  .receipt .r-summary{padding:14px 16px;}
+  .receipt .r-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:var(--ink-soft);}
+  .receipt .r-row .num{color:var(--ink);font-weight:600;}
+  .receipt .r-status{
+    margin-top:10px;padding:10px 14px;border-radius:9px;text-align:center;
+    font-weight:700;font-size:14.5px;font-family:"JetBrains Mono",monospace;
+  }
+  .receipt .r-status.paid{background:var(--sage-bg);color:var(--sage);}
+  .receipt .r-status.due{background:var(--rust-bg);color:var(--rust);}
+  .receipt .r-partial{
+    margin:0 16px 14px;padding:10px 12px;border:1.5px dashed var(--brass);border-radius:9px;
+    font-size:11.5px;color:var(--ink-soft);
+  }
+  .receipt .r-partial b{color:var(--brass);}
+  .receipt .r-footer{
+    text-align:center;padding:12px 16px 16px;font-size:12px;color:var(--ink-soft);
+    border-top:1px dashed var(--line);
+  }
+  .receipt .r-footer .thanks{font-family:"Fraunces",serif;color:var(--navy);font-weight:600;font-size:13.5px;margin-bottom:2px;}
 
   /* ---------- Ledger ---------- */
   .ledger-head{text-align:center;margin-bottom:12px;}
@@ -1660,27 +1700,44 @@ async function printReceipt(paymentId){
   currentReceiptFilename = buildReceiptFilename(s, p, payments);
 
   document.getElementById('receiptBody').innerHTML = `
-    <div class="r-head">
+    <div class="r-band">
       <div class="rname">${escapeHtml(SETTINGS.coachingName)}</div>
-      <div>${escapeHtml(SETTINGS.address||'')}</div>
-      <div>${escapeHtml(SETTINGS.phone||'')}</div>
+      <div class="rsub">${escapeHtml(SETTINGS.address||'')}${SETTINGS.phone ? ' · ' + escapeHtml(SETTINGS.phone) : ''}</div>
     </div>
-    <div class="r-row"><span>Receipt No.</span><span>${p.id.slice(-6).toUpperCase()}</span></div>
-    <div class="r-row"><span>Date</span><span>${escapeHtml(p.date)}</span></div>
-    <div class="r-row"><span>Student</span><span>${escapeHtml(s?s.name:'—')}</span></div>
-    <div class="r-row"><span>Admission Date</span><span>${escapeHtml(s?s.admissionDate:'—')}</span></div>
-    ${monthsLabel ? `<div class="r-row"><span>Fee For</span><span>${escapeHtml(monthsLabel)}</span></div>` : ''}
-    <div class="r-row"><span>Mode</span><span>${escapeHtml(p.mode)}</span></div>
-    ${p.note ? `<div class="r-row"><span>Note</span><span>${escapeHtml(p.note)}</span></div>` : ''}
-    <div class="r-row"><span>Amount Received</span><span>${money(p.amount)}</span></div>
-    <div class="r-row"><span>Total Charged Till Date</span><span>${money(bal.total)}</span></div>
-    <div class="r-row"><span>Total Paid Till Date</span><span>${money(bal.paid)}</span></div>
-    <div class="r-total"><span>Balance Due</span><span>${money(bal.balance)}</span></div>
+    <div class="r-title">Fee Receipt</div>
+
+    <div class="r-hero">
+      <div class="hlabel">Amount Received</div>
+      <div class="hamount">${money(p.amount)}</div>
+      <div class="hmeta">via ${escapeHtml(p.mode)} · ${escapeHtml(p.date)}</div>
+    </div>
+
+    <div class="r-grid">
+      <div><div class="glabel">Student</div><div class="gvalue">${escapeHtml(s?s.name:'—')}</div></div>
+      <div><div class="glabel">Receipt No.</div><div class="gvalue">#${p.id.slice(-6).toUpperCase()}</div></div>
+      <div><div class="glabel">Admission Date</div><div class="gvalue">${escapeHtml(s?s.admissionDate:'—')}</div></div>
+      <div><div class="glabel">Fee For</div><div class="gvalue">${monthsLabel ? escapeHtml(monthsLabel) : '—'}</div></div>
+      ${p.note ? `<div style="grid-column:1/-1;"><div class="glabel">Note</div><div class="gvalue">${escapeHtml(p.note)}</div></div>` : ''}
+    </div>
+
+    <div class="r-summary">
+      <div class="r-row"><span>Total Fee Charged Till Date</span><span class="num">${money(bal.total)}</span></div>
+      <div class="r-row"><span>Total Paid Till Date</span><span class="num">${money(bal.paid)}</span></div>
+      ${bal.balance > 0
+        ? `<div class="r-status due">Balance Due: ${money(bal.balance)}</div>`
+        : `<div class="r-status paid">✓ Fully Paid — No Balance Due</div>`
+      }
+    </div>
+
     ${partial.daysInCycle > 0 ? `
-    <div style="margin-top:10px;padding:8px 10px;border:1px dashed var(--brass);border-radius:6px;font-size:11.5px;">
-      <div>Current Month (Day ${partial.daysElapsed} of ${partial.daysInCycle}) — not yet due</div>
-      <div style="font-weight:700;margin-top:2px;">${money(partial.amount)}</div>
+    <div class="r-partial">
+      <b>Note:</b> The current month (${escapeHtml(partial.cycleLabel||'')}, Day ${partial.daysElapsed} of ${partial.daysInCycle}) is still in progress. An estimated ${money(partial.amount)} for this month is not yet due and is not included above.
     </div>` : ''}
+
+    <div class="r-footer">
+      <div class="thanks">Thank you for your payment!</div>
+      ${escapeHtml(SETTINGS.coachingName)}
+    </div>
   `;
   openModalEl('receiptModal');
 }
