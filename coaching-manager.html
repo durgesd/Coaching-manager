@@ -219,6 +219,25 @@
   .reminder-row.overdue .reminder-count{color:var(--rust);}
   .reminder-row.upcoming .reminder-count{color:var(--brass);}
 
+  /* ---------- Notify ---------- */
+  .check-row{
+    display:flex;align-items:center;gap:10px;padding:8px 4px;
+    border-bottom:1px solid var(--line);font-size:13.5px;
+  }
+  .check-row:last-child{border-bottom:none;}
+  .check-row input[type=checkbox]{width:18px;height:18px;flex:none;}
+  .send-row{
+    display:flex;align-items:center;gap:10px;
+    background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:10px 12px;margin-bottom:6px;
+  }
+  .send-row.sent{background:var(--sage-bg);border-color:var(--sage);}
+  .send-row .info{flex:1;min-width:0;}
+  .send-row .name{font-weight:700;font-size:13.5px;}
+  .send-row .meta{font-size:11px;color:var(--ink-soft);}
+  .btn.whatsapp{background:#25D366;color:#fff;}
+  .btn.whatsapp:disabled{opacity:.5;}
+
   /* ---------- Attendance grid ---------- */
   .att-row{
     display:flex;align-items:center;justify-content:space-between;
@@ -262,6 +281,7 @@
     <button class="tab-btn active" id="navDashboard" onclick="showView('dashboard')">Dashboard</button>
     <button class="tab-btn" id="navStudents" onclick="showView('students')">Students</button>
     <button class="tab-btn" id="navReminders" onclick="showView('reminders')">⏰ Reminders</button>
+    <button class="tab-btn" id="navNotify" onclick="showView('notify')">📢 Notify</button>
     <button class="tab-btn" id="navFees" onclick="showView('fees')">Fees</button>
     <button class="tab-btn" id="navAttendance" onclick="showView('attendance')">Attendance</button>
     <button class="tab-btn" id="navBatches" onclick="showView('batches')">Batches</button>
@@ -326,6 +346,62 @@
       <p class="hint">Students whose fee is due within 2 days, or already overdue. Overdue counts climb in red every day until payment is recorded.</p>
     </div>
     <div id="remindersList"></div>
+  </section>
+
+  <!-- ============ NOTIFY ============ -->
+  <section class="view" id="view-notify">
+    <div class="card" id="birthdayCard" style="display:none;">
+      <h3>🎂 Today's Birthdays</h3>
+      <div id="birthdayList"></div>
+    </div>
+
+    <div class="card">
+      <h3>📢 Compose a Message</h3>
+      <p class="hint">Pick a message type to load a ready-made template, edit it if you like, choose who to send it to, then send each one with a single tap on WhatsApp.</p>
+
+      <label>Message Type</label>
+      <select id="notifyTemplateType" onchange="loadNotifyTemplate()">
+        <option value="custom">Custom Message</option>
+        <option value="test">Test / Exam Announcement</option>
+        <option value="holiday">Holiday Notice</option>
+        <option value="feeReminder">Fee Reminder</option>
+        <option value="general">General Announcement</option>
+      </select>
+
+      <label>Message (use {name} where the student's name should go)</label>
+      <textarea id="notifyMessageText" style="min-height:110px;"></textarea>
+
+      <label style="margin-top:14px;">Send To</label>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn primary small" id="notifyModeBatchBtn" onclick="setNotifyRecipientMode('batch')">📚 By Batch</button>
+        <button class="btn ghost small" id="notifyModeSelectBtn" onclick="setNotifyRecipientMode('select')">☑️ Select Students</button>
+      </div>
+
+      <div id="notifyBatchPicker" style="margin-top:10px;">
+        <select id="notifyBatchSelect">
+          <option value="all">All Active Students</option>
+        </select>
+      </div>
+
+      <div id="notifySelectPicker" style="margin-top:10px;display:none;">
+        <input type="text" id="notifyStudentSearch" placeholder="Search students..." oninput="renderNotifyStudentChecklist()">
+        <div class="btn-row" style="margin-top:8px;">
+          <button class="btn ghost small" onclick="notifySelectAll(true)">Select All</button>
+          <button class="btn ghost small" onclick="notifySelectAll(false)">Clear</button>
+        </div>
+        <div id="notifyStudentChecklist" style="max-height:220px;overflow-y:auto;margin-top:8px;"></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn brass block" onclick="generateNotifySendList()">✉️ Build Send List</button>
+      </div>
+    </div>
+
+    <div class="card" id="notifySendListCard" style="display:none;">
+      <h3>Send List <span id="notifySendProgress" style="color:var(--ink-soft);font-weight:400;font-size:12.5px;"></span></h3>
+      <p class="hint">Tap Send for each student — it opens WhatsApp with the message ready to go.</p>
+      <div id="notifySendList"></div>
+    </div>
   </section>
 
   <!-- ============ FEES ============ -->
@@ -474,6 +550,9 @@
       <div><label>Batch</label><select id="studentBatch" onchange="prefillFeeFromBatch()"></select></div>
       <div><label>Admission Date</label><input type="date" id="studentAdmissionDate"></div>
     </div>
+    <label>Date of Birth (optional)</label>
+    <input type="date" id="studentDOB">
+    <p class="hint" style="margin:4px 0 0;">Used to send an automatic birthday wish on WhatsApp from the Notify tab.</p>
     <p class="hint" style="margin:8px 0 0;">Fee is calculated automatically, month by month, starting from the admission date above.</p>
     <div class="row2">
       <div><label>Monthly Fee (₹)</label><input type="number" id="studentMonthlyFee" placeholder="0"></div>
@@ -615,6 +694,7 @@ function showView(name){
   if (name === 'dashboard') renderDashboard();
   if (name === 'students') renderStudentList();
   if (name === 'reminders') renderReminders();
+  if (name === 'notify') renderNotifyView();
   if (name === 'fees') renderFeesView();
   if (name === 'attendance') renderAttendanceSheet();
   if (name === 'batches') renderBatchList();
@@ -826,20 +906,213 @@ async function renderReminders(){
   if (overdue.length){
     html += '<h3 style="font-family:\'Fraunces\',serif;color:var(--rust);margin:4px 0 8px;">🔴 Overdue (' + overdue.length + ')</h3>';
     html += overdue.map(({s, info}) => `
-      <div class="reminder-row overdue" onclick="openStudentDetail('${s.id}')">
-        <div class="reminder-count"><span class="n">${info.days}</span><span class="u">day${info.days===1?'':'s'} late</span></div>
-        <div class="info"><div class="name">${escapeHtml(s.name)}</div><div class="meta">${escapeHtml(s.phone||'')} · Balance ${money(info.balance)}</div></div>
+      <div class="reminder-row overdue">
+        <div class="reminder-count" onclick="openStudentDetail('${s.id}')"><span class="n">${info.days}</span><span class="u">day${info.days===1?'':'s'} late</span></div>
+        <div class="info" onclick="openStudentDetail('${s.id}')"><div class="name">${escapeHtml(s.name)}</div><div class="meta">${escapeHtml(s.phone||'')} · Balance ${money(info.balance)}</div></div>
+        <button class="btn whatsapp small" onclick="event.stopPropagation(); sendFeeReminderWhatsApp('${s.id}')" ${!s.phone && !s.parentPhone ? 'disabled' : ''}>💬</button>
       </div>`).join('');
   }
   if (upcoming.length){
     html += '<h3 style="font-family:\'Fraunces\',serif;color:var(--brass);margin:16px 0 8px;">🟡 Due Soon (' + upcoming.length + ')</h3>';
     html += upcoming.map(({s, info}) => `
-      <div class="reminder-row upcoming" onclick="openStudentDetail('${s.id}')">
-        <div class="reminder-count"><span class="n">${info.days}</span><span class="u">day${info.days===1?'':'s'} left</span></div>
-        <div class="info"><div class="name">${escapeHtml(s.name)}</div><div class="meta">${escapeHtml(s.phone||'')} · Next fee due soon</div></div>
+      <div class="reminder-row upcoming">
+        <div class="reminder-count" onclick="openStudentDetail('${s.id}')"><span class="n">${info.days}</span><span class="u">day${info.days===1?'':'s'} left</span></div>
+        <div class="info" onclick="openStudentDetail('${s.id}')"><div class="name">${escapeHtml(s.name)}</div><div class="meta">${escapeHtml(s.phone||'')} · Next fee due soon</div></div>
+        <button class="btn whatsapp small" onclick="event.stopPropagation(); sendFeeReminderWhatsApp('${s.id}')" ${!s.phone && !s.parentPhone ? 'disabled' : ''}>💬</button>
       </div>`).join('');
   }
   el.innerHTML = html;
+}
+
+/* =========================================================
+   WHATSAPP NOTIFY
+   ========================================================= */
+
+/* Converts a stored phone number into the digits-only, country-code-prefixed
+   format wa.me requires. Assumes India (91) when a bare 10-digit number is
+   stored, since that's this app's primary audience — already-prefixed
+   numbers are left as-is. */
+function formatPhoneForWhatsApp(phone){
+  let digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 10) digits = '91' + digits;
+  else if (digits.length === 11 && digits.startsWith('0')) digits = '91' + digits.slice(1);
+  return digits;
+}
+
+function buildWhatsAppLink(phone, message){
+  const digits = formatPhoneForWhatsApp(phone);
+  if (!digits) return null;
+  return 'https://wa.me/' + digits + '?text=' + encodeURIComponent(message);
+}
+
+function openWhatsApp(phone, message){
+  const link = buildWhatsAppLink(phone, message);
+  if (!link){ alert('No phone number on file for this contact.'); return false; }
+  window.open(link, '_blank');
+  return true;
+}
+
+async function sendFeeReminderWhatsApp(studentId){
+  const [students, payments] = await Promise.all([dbGetAll('students'), dbGetAll('payments')]);
+  const s = students.find(x => x.id === studentId);
+  if (!s) return;
+  const bal = await getStudentBalance(studentId, students, payments);
+  const message = `Dear Parent,\n\nThis is a gentle reminder that the fee of ${money(bal.balance)} for ${s.name} is due. Kindly clear the dues at your earliest convenience.\n\nThank you,\n${SETTINGS.coachingName}`;
+  const phone = s.parentPhone || s.phone;
+  openWhatsApp(phone, message);
+}
+
+/* ---- Birthdays ---- */
+function getTodaysBirthdays(students){
+  const today = new Date();
+  const mm = String(today.getMonth()+1).padStart(2,'0');
+  const dd = String(today.getDate()).padStart(2,'0');
+  return students.filter(s => s.status !== 'left' && s.dob && s.dob.slice(5,10) === `${mm}-${dd}`)
+    .sort((a,b) => a.name.localeCompare(b.name));
+}
+
+async function renderBirthdayCard(){
+  const students = await dbGetAll('students');
+  const birthdays = getTodaysBirthdays(students);
+  const card = document.getElementById('birthdayCard');
+  const list = document.getElementById('birthdayList');
+  if (!birthdays.length){ card.style.display = 'none'; return; }
+
+  card.style.display = 'block';
+  list.innerHTML = birthdays.map(s => {
+    const message = `Dear ${s.name},\n\nWishing you a very Happy Birthday! 🎉 May your year ahead be full of success and happiness.\n\nWarm wishes,\n${SETTINGS.coachingName}`;
+    const phone = s.parentPhone || s.phone;
+    return `<div class="send-row">
+      <div class="info"><div class="name">🎂 ${escapeHtml(s.name)}</div></div>
+      <button class="btn whatsapp small" onclick='openWhatsApp(${JSON.stringify(phone)}, ${JSON.stringify(message)})'>💬 Send Wish</button>
+    </div>`;
+  }).join('');
+}
+
+/* ---- Message templates ---- */
+const NOTIFY_TEMPLATES = {
+  custom: '',
+  test: `Dear Parent,\n\nThis is to inform you that a test has been scheduled. Please ensure {name} comes prepared and attends on time.\n\nRegards,\n${'{coachingName}'}`,
+  holiday: `Dear Parent,\n\nPlease note that the coaching will remain closed for a holiday. Regular classes will resume as per the usual schedule.\n\nRegards,\n${'{coachingName}'}`,
+  feeReminder: `Dear Parent,\n\nThis is a reminder that {name}'s fee is currently due. Kindly clear the pending amount at your earliest convenience.\n\nThank you,\n${'{coachingName}'}`,
+  general: `Dear Parent,\n\nThis is an important update from ${'{coachingName}'} regarding {name}. \n\nRegards,\n${'{coachingName}'}`
+};
+
+function loadNotifyTemplate(){
+  const type = document.getElementById('notifyTemplateType').value;
+  let text = NOTIFY_TEMPLATES[type] || '';
+  text = text.replace(/\{coachingName\}/g, SETTINGS.coachingName || 'Coaching');
+  document.getElementById('notifyMessageText').value = text;
+}
+
+/* ---- Recipient selection ---- */
+let notifyRecipientMode = 'batch';
+let notifySelectedIds = new Set();
+
+function setNotifyRecipientMode(mode){
+  notifyRecipientMode = mode;
+  document.getElementById('notifyModeBatchBtn').className = 'btn small ' + (mode==='batch' ? 'primary' : 'ghost');
+  document.getElementById('notifyModeSelectBtn').className = 'btn small ' + (mode==='select' ? 'primary' : 'ghost');
+  document.getElementById('notifyBatchPicker').style.display = mode === 'batch' ? 'block' : 'none';
+  document.getElementById('notifySelectPicker').style.display = mode === 'select' ? 'block' : 'none';
+  if (mode === 'select') renderNotifyStudentChecklist();
+}
+
+async function populateNotifyBatchSelect(){
+  const batches = await dbGetAll('batches');
+  const sel = document.getElementById('notifyBatchSelect');
+  const sorted = [...batches].sort((a,b)=>a.name.localeCompare(b.name));
+  sel.innerHTML = '<option value="all">All Active Students</option>' + sorted.map(b => '<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('');
+}
+
+async function renderNotifyStudentChecklist(){
+  const students = (await dbGetAll('students')).filter(s => s.status !== 'left').sort((a,b)=>a.name.localeCompare(b.name));
+  const q = (document.getElementById('notifyStudentSearch').value || '').toLowerCase();
+  const filtered = students.filter(s => !q || s.name.toLowerCase().includes(q));
+  const el = document.getElementById('notifyStudentChecklist');
+  el.innerHTML = filtered.map(s => `
+    <label class="check-row">
+      <input type="checkbox" data-id="${s.id}" ${notifySelectedIds.has(s.id)?'checked':''} onchange="onNotifyCheckboxChange('${s.id}', this.checked)">
+      <span>${escapeHtml(s.name)}</span>
+    </label>`).join('') || '<div class="hint">No students found.</div>';
+}
+
+function onNotifyCheckboxChange(id, checked){
+  if (checked) notifySelectedIds.add(id); else notifySelectedIds.delete(id);
+}
+
+async function notifySelectAll(select){
+  const students = (await dbGetAll('students')).filter(s => s.status !== 'left');
+  if (select) students.forEach(s => notifySelectedIds.add(s.id));
+  else notifySelectedIds.clear();
+  renderNotifyStudentChecklist();
+}
+
+/* ---- Build & send ---- */
+let notifySendQueue = [];
+let notifySentIds = new Set();
+
+async function generateNotifySendList(){
+  const template = document.getElementById('notifyMessageText').value.trim();
+  if (!template){ alert('Write or choose a message first.'); return; }
+
+  const students = await dbGetAll('students');
+  let recipients;
+
+  if (notifyRecipientMode === 'batch'){
+    const batchId = document.getElementById('notifyBatchSelect').value;
+    recipients = students.filter(s => s.status !== 'left' && (batchId === 'all' || s.batchId === batchId));
+  } else {
+    recipients = students.filter(s => notifySelectedIds.has(s.id));
+  }
+
+  if (!recipients.length){ alert('No students match this selection.'); return; }
+  recipients.sort((a,b)=>a.name.localeCompare(b.name));
+
+  notifySendQueue = recipients.map(s => ({
+    id: s.id,
+    name: s.name,
+    phone: s.parentPhone || s.phone,
+    message: template.replace(/\{name\}/g, s.name).replace(/\{coachingName\}/g, SETTINGS.coachingName || 'Coaching')
+  }));
+  notifySentIds = new Set();
+
+  document.getElementById('notifySendListCard').style.display = 'block';
+  renderNotifySendList();
+  document.getElementById('notifySendListCard').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function renderNotifySendList(){
+  const el = document.getElementById('notifySendList');
+  const progressEl = document.getElementById('notifySendProgress');
+  progressEl.textContent = `(${notifySentIds.size} / ${notifySendQueue.length} sent)`;
+
+  el.innerHTML = notifySendQueue.map((r, i) => {
+    const sent = notifySentIds.has(r.id);
+    return `<div class="send-row ${sent?'sent':''}">
+      <div class="info"><div class="name">${escapeHtml(r.name)}</div><div class="meta">${escapeHtml(r.phone||'No phone on file')}</div></div>
+      <button class="btn whatsapp small" onclick="sendNotifyMessage(${i})" ${!r.phone ? 'disabled' : ''}>${sent ? '✓ Sent' : '💬 Send'}</button>
+    </div>`;
+  }).join('');
+}
+
+function sendNotifyMessage(index){
+  const r = notifySendQueue[index];
+  if (!r) return;
+  const opened = openWhatsApp(r.phone, r.message);
+  if (opened){
+    notifySentIds.add(r.id);
+    renderNotifySendList();
+  }
+}
+
+async function renderNotifyView(){
+  await renderBirthdayCard();
+  await populateNotifyBatchSelect();
+  if (!document.getElementById('notifyMessageText').value) loadNotifyTemplate();
+  document.getElementById('notifySendListCard').style.display = notifySendQueue.length ? 'block' : 'none';
+  if (notifySendQueue.length) renderNotifySendList();
 }
 
 async function batchNameById(id, batches){
@@ -939,6 +1212,7 @@ async function openStudentForm(existing){
   document.getElementById('studentParentPhone').value = existing ? existing.parentPhone : '';
   document.getElementById('studentAddress').value = existing ? existing.address : '';
   document.getElementById('studentAdmissionDate').value = existing ? existing.admissionDate : todayStr();
+  document.getElementById('studentDOB').value = existing ? (existing.dob||'') : '';
   document.getElementById('studentMonthlyFee').value = existing ? existing.monthlyFee : '';
   document.getElementById('studentDiscount').value = existing ? (existing.discount || '') : '';
   document.getElementById('studentAdvanceFee').value = '';
@@ -962,6 +1236,7 @@ async function saveStudent(){
     address: document.getElementById('studentAddress').value.trim(),
     batchId: document.getElementById('studentBatch').value,
     admissionDate: document.getElementById('studentAdmissionDate').value || todayStr(),
+    dob: document.getElementById('studentDOB').value || '',
     monthlyFee: Number(document.getElementById('studentMonthlyFee').value || 0),
     discount: Number(document.getElementById('studentDiscount').value || 0),
     notes: document.getElementById('studentNotes').value.trim()
