@@ -28,7 +28,7 @@
     --line:#E4DFCF;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  html,body{margin:0;padding:0;}
+  html,body{margin:0;padding:0;overscroll-behavior-y:contain;}
   body{
     font-family:"Inter",-apple-system,Segoe UI,sans-serif;
     background:var(--paper);
@@ -1755,7 +1755,7 @@ async function restoreBackup(e){
 /* =========================================================
    Google Drive Auto-Backup
    ========================================================= */
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
 const DRIVE_FOLDER_NAME = 'Pragya Coaching Backups';
 const DRIVE_KEEP_DAYS = 2;
 
@@ -1768,6 +1768,7 @@ function initDriveTokenClient(){
     driveTokenClient = google.accounts.oauth2.initTokenClient({
       client_id: SETTINGS.driveClientId,
       scope: DRIVE_SCOPE,
+      hint: SETTINGS.driveAccountEmail || undefined,
       callback: () => {} // overridden per-call below
     });
   } catch(e){
@@ -1775,17 +1776,43 @@ function initDriveTokenClient(){
   }
 }
 
+/* Once we know which Google account was used, every future request passes
+   that account as a "hint" — this is what lets Google skip the account
+   picker on reconnect (the picker only appears when Google doesn't know
+   which of possibly several signed-in accounts to use). */
 function requestDriveToken(interactive){
   return new Promise((resolve, reject) => {
     if (!driveTokenClient){ reject(new Error('Drive not set up')); return; }
-    driveTokenClient.callback = (resp) => {
-      if (resp && resp.access_token){ driveAccessToken = resp.access_token; resolve(resp.access_token); }
+    driveTokenClient.callback = async (resp) => {
+      if (resp && resp.access_token){
+        driveAccessToken = resp.access_token;
+        await rememberDriveAccountEmail();
+        resolve(resp.access_token);
+      }
       else reject(new Error('No access token'));
     };
     try {
-      driveTokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+      driveTokenClient.requestAccessToken({
+        prompt: interactive ? 'consent' : '',
+        hint: SETTINGS.driveAccountEmail || undefined
+      });
     } catch(e){ reject(e); }
   });
+}
+
+async function rememberDriveAccountEmail(){
+  if (SETTINGS.driveAccountEmail || !driveAccessToken) return;
+  try {
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: 'Bearer ' + driveAccessToken }
+    });
+    const info = await res.json();
+    if (info && info.email){
+      SETTINGS.driveAccountEmail = info.email;
+      await dbPut('settings', SETTINGS);
+      if (driveTokenClient) driveTokenClient.hint = info.email;
+    }
+  } catch(e){ /* not critical — silent reconnect will just fall back to asking each time */ }
 }
 
 async function getValidDriveAccessToken(interactive){
@@ -1877,11 +1904,14 @@ async function connectGoogleDrive(){
   updateDriveStatusUI();
 }
 
-function disconnectGoogleDrive(){
+async function disconnectGoogleDrive(){
   if (driveAccessToken && window.google && google.accounts && google.accounts.oauth2){
     google.accounts.oauth2.revoke(driveAccessToken, () => {});
   }
   driveAccessToken = null;
+  delete SETTINGS.driveAccountEmail;
+  await dbPut('settings', SETTINGS);
+  initDriveTokenClient();
   updateDriveStatusUI();
 }
 
