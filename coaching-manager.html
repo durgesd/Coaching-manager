@@ -2292,6 +2292,16 @@ function updateDriveStatusUI(){
   }
   if ('serviceWorker' in navigator){
     navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+
+    // Auto-reload once whenever a newer service worker takes over, so
+    // updates always show up on their own instead of getting stuck behind
+    // an old cached version — no manual "clear cache" ever needed again.
+    let swRefreshed = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (swRefreshed) return;
+      swRefreshed = true;
+      window.location.reload();
+    });
   }
 
   if (SETTINGS.driveClientId) initDriveTokenClient();

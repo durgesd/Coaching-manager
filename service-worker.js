@@ -1,4 +1,4 @@
-const CACHE_NAME = 'coaching-manager-v3';
+const CACHE_NAME = 'coaching-manager-v4';
 const FILES_TO_CACHE = [
   './coaching-manager.html',
   './manifest.json',
