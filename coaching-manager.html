@@ -1738,12 +1738,12 @@ async function printReceipt(paymentId){
 
     ${partial.daysInCycle > 0 ? `
     <div class="r-partial">
-      <b>ℹ️ About this month:</b>
+      <b>ℹ️ इस महीने की जानकारी:</b>
       ${partial.amount > 0 ? `
-        <div style="margin-top:4px;">${escapeHtml(partial.cycleLabel||'This month')}'s billing cycle is currently in progress (${partial.daysElapsed} of ${partial.daysInCycle} days so far). Its fee isn't officially due yet — it will be added to the balance only once the month is complete. Just so you know what's coming: about <b>${money(partial.amount)}</b> so far.</div>
+        <div style="margin-top:4px;">${escapeHtml(partial.cycleLabel||'यह महीना')} जारी है (${partial.daysElapsed}/${partial.daysInCycle} दिन)। अनुमानित <b>${money(partial.amount)}</b> — अभी देय नहीं।</div>
         <div class="r-partial-bar"><div class="r-partial-fill" style="width:${Math.min(100, Math.round(partial.daysElapsed/partial.daysInCycle*100))}%;"></div></div>
       ` : `
-        <div style="margin-top:4px;">${escapeHtml(partial.cycleLabel||'This month')}'s billing cycle starts today. Nothing is due for it yet.</div>
+        <div style="margin-top:4px;">${escapeHtml(partial.cycleLabel||'यह महीना')} आज से शुरू। अभी कुछ देय नहीं।</div>
       `}
     </div>` : ''}
 
