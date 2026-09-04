@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root{
     --navy:#1B2A4A;
@@ -666,7 +667,9 @@
   <div class="modal-sheet">
     <div class="modal-head"><h3>Fee Receipt</h3><button class="close-x" onclick="closeModal('receiptModal')">✕</button></div>
     <div class="printable" id="printArea"><div class="receipt" id="receiptBody"></div></div>
+    <div id="receiptShareStatus" class="hint" style="display:none;margin:8px 0 0;"></div>
     <div class="btn-row">
+      <button class="btn whatsapp block" onclick="shareReceiptToWhatsApp()">📤 Send via WhatsApp</button>
       <button class="btn brass block" onclick="printCurrentReceipt()">🖨 Print / Save as PDF</button>
     </div>
   </div>
@@ -1818,6 +1821,10 @@ async function recordPayment(){
 }
 
 let currentReceiptFilename = 'receipt';
+let currentReceiptPhone = '';
+let currentReceiptStudentName = '';
+let currentReceiptAmount = 0;
+let currentReceiptBalance = 0;
 let originalDocTitle = document.title;
 
 async function printReceipt(paymentId){
@@ -1832,6 +1839,11 @@ async function printReceipt(paymentId){
   const monthsCovered = s ? getMonthsCoveredByPayment(s, payments, p.id) : [];
   const monthsLabel = monthsCovered.map(d => fmtMonthYear(d)).join(', ');
   currentReceiptFilename = buildReceiptFilename(s, p, payments);
+  currentReceiptPhone = s ? (s.parentPhone || s.phone || '') : '';
+  currentReceiptStudentName = s ? s.name : '';
+  currentReceiptAmount = p.amount;
+  currentReceiptBalance = bal.balance;
+  document.getElementById('receiptShareStatus').style.display = 'none';
 
   document.getElementById('receiptBody').innerHTML = `
     <div class="r-band">
@@ -1887,6 +1899,47 @@ function printCurrentReceipt(){
   window.print();
 }
 window.addEventListener('afterprint', () => { document.title = originalDocTitle; });
+
+/* Renders the receipt card to an image and hands it to the device's native
+   share sheet, so it can go straight to WhatsApp in one step — no more
+   download-then-manually-attach. Falls back to a pre-filled WhatsApp text
+   message (no image) on browsers that don't support sharing files. */
+async function shareReceiptToWhatsApp(){
+  const statusEl = document.getElementById('receiptShareStatus');
+  statusEl.style.display = 'block';
+  statusEl.textContent = 'Preparing receipt image…';
+
+  const receiptEl = document.getElementById('receiptBody');
+  const canShareFiles = navigator.canShare && window.File;
+
+  try {
+    if (typeof html2canvas !== 'function') throw new Error('html2canvas not loaded');
+
+    const canvas = await html2canvas(receiptEl, { scale: 2, backgroundColor: '#ffffff' });
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Could not create image');
+
+    const file = new File([blob], currentReceiptFilename + '.png', { type: 'image/png' });
+
+    if (canShareFiles && navigator.canShare({ files: [file] })){
+      statusEl.style.display = 'none';
+      await navigator.share({
+        files: [file],
+        title: 'Fee Receipt',
+        text: `Fee receipt for ${currentReceiptStudentName} — ${money(currentReceiptAmount)} received.`
+      });
+      return;
+    }
+    throw new Error('File sharing not supported on this browser');
+  } catch(e){
+    // Fallback: no image sharing available — send the same details as a
+    // WhatsApp text message instead, still in one tap.
+    statusEl.textContent = 'Image sharing isn\u2019t supported here — sending as a text message instead.';
+    const message = `Dear Parent,\n\nReceipt for ${currentReceiptStudentName}:\nAmount Received: ${money(currentReceiptAmount)}\nBalance Due: ${money(currentReceiptBalance)}\n\n${SETTINGS.coachingName}`;
+    const opened = openWhatsApp(currentReceiptPhone, message);
+    statusEl.style.display = opened ? 'none' : 'block';
+  }
+}
 
 
 /* =========================================================
