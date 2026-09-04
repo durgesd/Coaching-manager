@@ -369,20 +369,38 @@
     <div class="btn-row" style="margin-top:0;margin-bottom:12px;">
       <button class="btn primary" onclick="openStudentForm()">+ New Admission</button>
     </div>
-    <input type="text" class="search-box" id="studentSearch" placeholder="Search by name or phone..." oninput="renderStudentList()">
-    <div class="row2" style="margin-bottom:12px;">
-      <select id="filterBatch" onchange="renderStudentList()"><option value="">All Batches</option></select>
-      <select id="filterFeeStatus" onchange="renderStudentList()">
-        <option value="">All Fee Status</option>
-        <option value="due">Pending Dues Only</option>
-        <option value="paid">Paid Up Only</option>
-      </select>
+
+    <div class="card" style="margin-bottom:14px;">
+      <h3>🔍 Filters</h3>
+      <input type="text" class="search-box" id="studentSearch" placeholder="Search by name or phone..." oninput="renderStudentList()">
+      <div class="row2" style="margin-bottom:10px;">
+        <select id="filterBatch" onchange="renderStudentList()"><option value="">All Batches</option></select>
+        <select id="filterFeeStatus" onchange="renderStudentList()">
+          <option value="">All Fee Status</option>
+          <option value="due">Pending Dues Only</option>
+          <option value="paid">Paid Up Only</option>
+        </select>
+      </div>
+      <div class="row2" style="margin-bottom:0;">
+        <select id="filterStatus" onchange="renderStudentList()">
+          <option value="active">Active Students</option>
+          <option value="left">Left / Dropped Out</option>
+          <option value="all">All Students</option>
+        </select>
+        <select id="filterSort" onchange="renderStudentList()">
+          <option value="name-asc">Sort: Name (A–Z)</option>
+          <option value="name-desc">Sort: Name (Z–A)</option>
+          <option value="due-high">Sort: Highest Due First</option>
+          <option value="admission-new">Sort: Newest Admission</option>
+          <option value="admission-old">Sort: Oldest Admission</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn ghost small" onclick="clearStudentFilters()">↺ Clear Filters</button>
+      </div>
+      <div class="hint" id="studentFilterSummary" style="margin:10px 0 0;"></div>
     </div>
-    <select id="filterStatus" onchange="renderStudentList()" style="margin-bottom:12px;">
-      <option value="active">Active Students</option>
-      <option value="left">Left / Dropped Out</option>
-      <option value="all">All Students</option>
-    </select>
+
     <div id="studentList"></div>
   </section>
 
@@ -457,6 +475,7 @@
       <h3>Record a Payment</h3>
       <p class="hint">Select a student, enter the amount received, and save — this works for the advance fee at admission or any later installment.</p>
       <label>Student</label>
+      <input type="text" id="feeStudentSearch" placeholder="Type to search a student..." oninput="filterFeePaymentStudents()" style="margin-bottom:8px;">
       <select id="feePaymentStudent"></select>
       <div class="row2">
         <div><label>Amount Received (₹)</label><input type="number" id="feePaymentAmount" placeholder="0"></div>
@@ -553,6 +572,12 @@
         <button class="btn ghost small" onclick="document.getElementById('restoreFile').click()">⬆ Restore Backup</button>
         <input type="file" id="restoreFile" accept="application/json" style="display:none;" onchange="restoreBackup(event)">
       </div>
+    </div>
+
+    <div class="card">
+      <h3>🗑 Trash <span style="color:var(--ink-soft);font-weight:400;font-size:12.5px;">(<span id="trashCount">0</span>)</span></h3>
+      <p class="hint">Students moved to Trash (usually by mistake or for test entries) stay here — fully restorable — until you choose to permanently delete them. Nothing here counts as an active student anywhere in the app.</p>
+      <div id="trashList"></div>
     </div>
 
     <div class="card">
@@ -729,6 +754,17 @@ const money = n => '₹' + Math.round(n||0).toLocaleString('en-IN');
 const todayStr = () => new Date().toISOString().slice(0,10);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 
+/* A student is only "active" (shows up in rosters, dropdowns, counts,
+   notifications) if they haven't left AND haven't been moved to Trash.
+   Using one shared check everywhere avoids the two states drifting out
+   of sync with each other. */
+function isActiveStudent(s){
+  return s.status !== 'left' && s.status !== 'deleted';
+}
+function isInTrash(s){
+  return s.status === 'deleted';
+}
+
 /* =========================================================
    Tabs
    ========================================================= */
@@ -745,7 +781,7 @@ function showView(name){
   if (name === 'fees') renderFeesView();
   if (name === 'attendance') renderAttendanceSheet();
   if (name === 'batches') renderBatchList();
-  if (name === 'settings') updateDriveStatusUI();
+  if (name === 'settings'){ updateDriveStatusUI(); renderTrashList(); }
 }
 
 function closeModal(id){ document.getElementById(id).classList.remove('show'); }
@@ -904,7 +940,7 @@ function buildReceiptFilename(student, payment, allPayments){
      monthly charge is due within 2 days
    Returns null if neither applies (nothing to remind about). */
 function getDueInfo(student, payments, asOf){
-  if (student.status === 'left') return null;
+  if (!isActiveStudent(student)) return null;
   const effectiveFee = Math.max(0, Number(student.monthlyFee||0) - Number(student.discount||0));
   if (!student.admissionDate || effectiveFee <= 0) return null;
 
@@ -1015,7 +1051,7 @@ function getTodaysBirthdays(students){
   const today = new Date();
   const mm = String(today.getMonth()+1).padStart(2,'0');
   const dd = String(today.getDate()).padStart(2,'0');
-  return students.filter(s => s.status !== 'left' && s.dob && s.dob.slice(5,10) === `${mm}-${dd}`)
+  return students.filter(s => isActiveStudent(s) && s.dob && s.dob.slice(5,10) === `${mm}-${dd}`)
     .sort((a,b) => a.name.localeCompare(b.name));
 }
 
@@ -1074,7 +1110,7 @@ async function populateNotifyBatchSelect(){
 }
 
 async function renderNotifyStudentChecklist(){
-  const students = (await dbGetAll('students')).filter(s => s.status !== 'left').sort((a,b)=>a.name.localeCompare(b.name));
+  const students = (await dbGetAll('students')).filter(isActiveStudent).sort((a,b)=>a.name.localeCompare(b.name));
   const q = (document.getElementById('notifyStudentSearch').value || '').toLowerCase();
   const filtered = students.filter(s => !q || s.name.toLowerCase().includes(q));
   const el = document.getElementById('notifyStudentChecklist');
@@ -1090,7 +1126,7 @@ function onNotifyCheckboxChange(id, checked){
 }
 
 async function notifySelectAll(select){
-  const students = (await dbGetAll('students')).filter(s => s.status !== 'left');
+  const students = (await dbGetAll('students')).filter(isActiveStudent);
   if (select) students.forEach(s => notifySelectedIds.add(s.id));
   else notifySelectedIds.clear();
   renderNotifyStudentChecklist();
@@ -1109,7 +1145,7 @@ async function generateNotifySendList(){
 
   if (notifyRecipientMode === 'batch'){
     const batchId = document.getElementById('notifyBatchSelect').value;
-    recipients = students.filter(s => s.status !== 'left' && (batchId === 'all' || s.batchId === batchId));
+    recipients = students.filter(s => isActiveStudent(s) && (batchId === 'all' || s.batchId === batchId));
   } else {
     recipients = students.filter(s => notifySelectedIds.has(s.id));
   }
@@ -1192,13 +1228,13 @@ function updatePendingDuesDisplay(){
 async function renderDashboard(){
   const [students, payments, batches] = await Promise.all([dbGetAll('students'), dbGetAll('payments'), dbGetAll('batches')]);
 
-  document.getElementById('statStudents').textContent = students.filter(s => s.status !== 'left').length;
+  document.getElementById('statStudents').textContent = students.filter(isActiveStudent).length;
   const totalCollected = payments.filter(p => p.status !== 'reversed' && p.type !== 'discount').reduce((a,p)=>a+Number(p.amount||0),0);
   document.getElementById('statCollected').textContent = money(totalCollected);
 
   let totalPendingCompleted = 0, totalPendingWithPartial = 0;
   const duesRows = [];
-  for (const s of students){
+  for (const s of students.filter(s => !isInTrash(s))){
     const bal = await getStudentBalance(s.id, students, payments);
     totalPendingCompleted += bal.balance;
     totalPendingWithPartial += bal.balance + bal.partial;
@@ -1208,7 +1244,7 @@ async function renderDashboard(){
   updatePendingDuesDisplay();
   document.getElementById('statBatches').textContent = batches.length;
 
-  const recent = [...students].sort((a,b)=> (b.admissionDate||'').localeCompare(a.admissionDate||'')).slice(0,5);
+  const recent = students.filter(s => !isInTrash(s)).sort((a,b)=> (b.admissionDate||'').localeCompare(a.admissionDate||'')).slice(0,5);
   const recentEl = document.getElementById('recentAdmissions');
   recentEl.innerHTML = recent.length ? recent.map(s => studentListItemHTML(s, batches)).join('') :
     '<div class="empty-state"><div class="big">🎓</div>No admissions yet.</div>';
@@ -1325,12 +1361,13 @@ async function renderStudentList(){
   const batchFilter = document.getElementById('filterBatch').value;
   const feeStatusFilter = document.getElementById('filterFeeStatus').value;
   const statusFilter = document.getElementById('filterStatus').value;
+  const sortBy = document.getElementById('filterSort').value;
 
   let filtered = students.filter(s => !q || s.name.toLowerCase().includes(q) || (s.phone||'').includes(q));
+  filtered = filtered.filter(s => !isInTrash(s)); // Trash never shows in the regular Students list
   if (batchFilter) filtered = filtered.filter(s => s.batchId === batchFilter);
-  if (statusFilter === 'active') filtered = filtered.filter(s => s.status !== 'left');
+  if (statusFilter === 'active') filtered = filtered.filter(isActiveStudent);
   if (statusFilter === 'left') filtered = filtered.filter(s => s.status === 'left');
-  filtered.sort((a,b)=> a.name.localeCompare(b.name));
 
   const el = document.getElementById('studentList');
 
@@ -1343,6 +1380,19 @@ async function renderStudentList(){
   let visible = rowsData;
   if (feeStatusFilter === 'due') visible = visible.filter(r => r.bal.balance > 0);
   if (feeStatusFilter === 'paid') visible = visible.filter(r => r.bal.balance <= 0);
+
+  const sorters = {
+    'name-asc': (a,b) => a.s.name.localeCompare(b.s.name),
+    'name-desc': (a,b) => b.s.name.localeCompare(a.s.name),
+    'due-high': (a,b) => b.bal.balance - a.bal.balance,
+    'admission-new': (a,b) => (b.s.admissionDate||'').localeCompare(a.s.admissionDate||''),
+    'admission-old': (a,b) => (a.s.admissionDate||'').localeCompare(b.s.admissionDate||'')
+  };
+  visible.sort(sorters[sortBy] || sorters['name-asc']);
+
+  const summaryEl = document.getElementById('studentFilterSummary');
+  const totalNonTrashed = students.filter(s => !isInTrash(s)).length;
+  summaryEl.textContent = `Showing ${visible.length} of ${totalNonTrashed} students`;
 
   if (!visible.length){
     el.innerHTML = '<div class="empty-state"><div class="big">🎓</div>No students match these filters.</div>';
@@ -1359,6 +1409,15 @@ async function renderStudentList(){
       badge +
     '</div>';
   }).join('');
+}
+
+function clearStudentFilters(){
+  document.getElementById('studentSearch').value = '';
+  document.getElementById('filterBatch').value = '';
+  document.getElementById('filterFeeStatus').value = '';
+  document.getElementById('filterStatus').value = 'active';
+  document.getElementById('filterSort').value = 'name-asc';
+  renderStudentList();
 }
 
 function paymentRowHTML(p){
@@ -1508,7 +1567,7 @@ async function openStudentDetail(id){
           ? `<button class="btn sage small" onclick="reactivateStudent('${id}')">↺ Reactivate</button>`
           : `<button class="btn ghost small" onclick="markStudentLeft('${id}')">🚪 Mark as Left</button>`
         }
-        <button class="btn rust small" onclick="deleteStudent('${id}')">🗑 Delete Permanently</button>
+        <button class="btn rust small" onclick="deleteStudent('${id}')">🗑 Move to Trash</button>
       </div>
     </div>
     ${partialBox}
@@ -1621,23 +1680,91 @@ async function shareLedger(){
 }
 
 async function deleteStudent(id){
-  if (!confirm('Delete this student and their payment history? This cannot be undone.')) return;
-  await dbDelete('students', id);
-  const payments = await dbGetAll('payments');
-  for (const p of payments.filter(p => p.studentId === id)) await dbDelete('payments', p.id);
+  const students = await dbGetAll('students');
+  const s = students.find(x => x.id === id);
+  if (!s) return;
+  if (!confirm(s.name + ' will be moved to Trash. Their record and fee history stay safe and can be restored anytime, or permanently deleted later from Settings → Trash.')) return;
+  s.previousStatus = s.status || 'active';
+  s.status = 'deleted';
+  s.deletedAt = todayStr();
+  await dbPut('students', s);
   closeModal('studentDetailModal');
   renderStudentList();
   renderDashboard();
 }
 
+async function restoreFromTrash(id){
+  const students = await dbGetAll('students');
+  const s = students.find(x => x.id === id);
+  if (!s) return;
+  if (s.previousStatus && s.previousStatus !== 'active') s.status = s.previousStatus;
+  else delete s.status;
+  delete s.previousStatus;
+  delete s.deletedAt;
+  await dbPut('students', s);
+  renderTrashList();
+  renderStudentList();
+  renderDashboard();
+}
+
+async function permanentlyDeleteForever(id){
+  const students = await dbGetAll('students');
+  const s = students.find(x => x.id === id);
+  if (!s) return;
+  const typed = prompt('This permanently erases ' + s.name + ' and all their payment/attendance history — there is no way to get this back. Type DELETE to confirm.');
+  if (typed !== 'DELETE') return;
+
+  await dbDelete('students', id);
+  const payments = await dbGetAll('payments');
+  for (const p of payments.filter(p => p.studentId === id)) await dbDelete('payments', p.id);
+  const attendance = await dbGetAll('attendance');
+  for (const a of attendance.filter(a => a.studentId === id)) await dbDelete('attendance', a.id);
+
+  renderTrashList();
+  renderStudentList();
+  renderDashboard();
+}
+
+async function renderTrashList(){
+  const el = document.getElementById('trashList');
+  if (!el) return;
+  const students = await dbGetAll('students');
+  const trashed = students.filter(isInTrash).sort((a,b) => (b.deletedAt||'').localeCompare(a.deletedAt||''));
+  document.getElementById('trashCount').textContent = trashed.length;
+
+  if (!trashed.length){
+    el.innerHTML = '<div class="hint">Trash is empty.</div>';
+    return;
+  }
+  el.innerHTML = trashed.map(s => `
+    <div class="list-item" style="cursor:default;">
+      <div class="info"><div class="name">${escapeHtml(s.name)}</div><div class="meta">Deleted ${escapeHtml(s.deletedAt||'')}</div></div>
+      <button class="btn sage small" onclick="restoreFromTrash('${s.id}')">↺ Restore</button>
+      <button class="btn rust small" onclick="permanentlyDeleteForever('${s.id}')">❌ Delete Forever</button>
+    </div>`).join('');
+}
+
 /* =========================================================
    FEES
    ========================================================= */
+let feePaymentStudentsCache = [];
+
+function populateFeePaymentSelect(list){
+  const sel = document.getElementById('feePaymentStudent');
+  sel.innerHTML = list.length ? list.map(s => '<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>').join('') : '<option value="">No matching students</option>';
+}
+
+function filterFeePaymentStudents(){
+  const q = document.getElementById('feeStudentSearch').value.trim().toLowerCase();
+  const filtered = q ? feePaymentStudentsCache.filter(s => s.name.toLowerCase().includes(q) || (s.phone||'').includes(q)) : feePaymentStudentsCache;
+  populateFeePaymentSelect(filtered);
+}
+
 async function renderFeesView(){
   const [students, payments] = await Promise.all([dbGetAll('students'), dbGetAll('payments')]);
-  const sortedStudents = [...students].sort((a,b)=> a.name.localeCompare(b.name));
-  const sel = document.getElementById('feePaymentStudent');
-  sel.innerHTML = sortedStudents.length ? sortedStudents.map(s => '<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>').join('') : '<option value="">No students yet</option>';
+  feePaymentStudentsCache = [...students].filter(isActiveStudent).sort((a,b)=> a.name.localeCompare(b.name));
+  document.getElementById('feeStudentSearch').value = '';
+  populateFeePaymentSelect(feePaymentStudentsCache);
   document.getElementById('feePaymentDate').value = todayStr();
 
   const list = [...payments].sort((a,b)=> (b.date||'').localeCompare(a.date||''));
@@ -1893,10 +2020,10 @@ async function renderAttendanceSheet(){
 
   let roster;
   if (attendanceMode === 'all'){
-    roster = [...students].sort((a,b) => a.name.localeCompare(b.name));
+    roster = students.filter(isActiveStudent).sort((a,b) => a.name.localeCompare(b.name));
   } else {
     const batchId = batchSel.value;
-    roster = students.filter(s => s.batchId === batchId);
+    roster = students.filter(s => isActiveStudent(s) && s.batchId === batchId);
   }
 
   if (!roster.length){
@@ -1941,10 +2068,10 @@ async function markRemainingAbsent(date){
   const [batches, students] = await Promise.all([dbGetAll('batches'), dbGetAll('students')]);
   let roster;
   if (attendanceMode === 'all'){
-    roster = students;
+    roster = students.filter(isActiveStudent);
   } else {
     const batchId = document.getElementById('attendanceBatch').value;
-    roster = students.filter(s => s.batchId === batchId);
+    roster = students.filter(s => isActiveStudent(s) && s.batchId === batchId);
   }
   const records = await dbGetAll('attendance');
   const markedToday = new Set(records.filter(r => r.date === date).map(r => r.studentId));
