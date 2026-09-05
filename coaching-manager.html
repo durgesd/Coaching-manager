@@ -570,23 +570,24 @@
   <!-- ============ FINANCE ============ -->
   <section class="view" id="view-finance">
     <div class="card">
+      <p class="hint" style="margin:0 0 10px;">Track everything money-related here — coaching expenses, personal/household spending, and any money coming in from outside — since coaching income covers all of it.</p>
       <label>Viewing Month</label>
       <input type="month" id="financeMonth" onchange="renderFinanceView()">
     </div>
 
     <div class="stat-grid">
       <div class="stat-card good"><div class="label">Fee Income</div><div class="value num" id="finFeeIncome">₹0</div></div>
-      <div class="stat-card good"><div class="label">Other Income</div><div class="value num" id="finOtherIncome">₹0</div></div>
-      <div class="stat-card warn"><div class="label">Expenses</div><div class="value num" id="finExpenses">₹0</div></div>
+      <div class="stat-card good"><div class="label">Money From Outside</div><div class="value num" id="finOtherIncome">₹0</div></div>
+      <div class="stat-card warn"><div class="label">All Expenses</div><div class="value num" id="finExpenses">₹0</div></div>
       <div class="stat-card" id="finNetCard"><div class="label">Net</div><div class="value num" id="finNet">₹0</div></div>
     </div>
 
     <div class="card">
-      <h3 id="finFormTitle">Add Expense / Other Income</h3>
+      <h3 id="finFormTitle">Add Expense / Money From Outside</h3>
       <input type="hidden" id="finId">
       <div class="btn-row" style="margin-top:0;">
-        <button class="btn rust small" id="finTypeExpenseBtn" onclick="setFinanceType('expense')">📤 Expense</button>
-        <button class="btn ghost small" id="finTypeIncomeBtn" onclick="setFinanceType('income')">📥 Other Income</button>
+        <button class="btn rust small" id="finTypeExpenseBtn" onclick="setFinanceType('expense')">📤 Expense (Coaching or Personal)</button>
+        <button class="btn ghost small" id="finTypeIncomeBtn" onclick="setFinanceType('income')">📥 Money From Outside</button>
       </div>
       <label id="finCategoryLabel">Category</label>
       <select id="finCategory"></select>
@@ -2281,8 +2282,16 @@ async function deleteBatch(id){
    FINANCE (Income & Expenses)
    ========================================================= */
 const FINANCE_CATEGORIES = {
-  expense: ['Rent', 'Staff Salary', 'Electricity / Utilities', 'Stationery & Supplies', 'Marketing / Advertising', 'Maintenance & Repairs', 'Internet / Phone', 'Other'],
-  income: ['Registration Fee', 'Donation', 'Book / Material Sales', 'Other']
+  expense: [
+    'Coaching Rent', 'Staff Salary', 'Electricity / Utilities', 'Stationery & Supplies',
+    'Marketing / Advertising', 'Maintenance & Repairs', 'Internet / Phone',
+    'Household / Groceries', 'Personal / Family', 'Medical / Health', 'Transport / Fuel',
+    'Home Rent / EMI', 'Loan / EMI Payment', 'Education (Own/Kids)', 'Shopping', 'Other'
+  ],
+  income: [
+    'Money From Outside (Savings)', 'Loan / Borrowed', 'Gift / Family Support',
+    'Other Job / Side Income', 'Registration Fee', 'Donation', 'Book / Material Sales', 'Other'
+  ]
 };
 
 let financeType = 'expense';
@@ -2336,7 +2345,7 @@ function cancelFinanceEdit(){
   document.getElementById('finAmount').value = '';
   document.getElementById('finNote').value = '';
   document.getElementById('finDate').value = todayStr();
-  document.getElementById('finFormTitle').textContent = 'Add Expense / Other Income';
+  document.getElementById('finFormTitle').textContent = 'Add Expense / Money From Outside';
   document.getElementById('finCancelBtn').style.display = 'none';
   setFinanceType(financeType);
 }
