@@ -283,6 +283,23 @@
   .btn.whatsapp{background:#25D366;color:#fff;}
   .btn.whatsapp:disabled{opacity:.5;}
 
+  /* ---------- Finance ---------- */
+  .fin-row{
+    display:flex;align-items:center;justify-content:space-between;
+    background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:10px 12px;margin-bottom:6px;
+  }
+  .fin-row.expense .amt{color:var(--rust);}
+  .fin-row.income .amt{color:var(--sage);}
+  .fin-row .amt{font-family:"JetBrains Mono",monospace;font-weight:700;}
+  .fin-row .info{flex:1;min-width:0;font-size:13.5px;}
+  .fin-row .meta{font-size:11px;color:var(--ink-soft);margin-top:1px;}
+  .fin-cat-row{
+    display:flex;justify-content:space-between;padding:6px 0;
+    border-bottom:1px dotted var(--line);font-size:13px;
+  }
+  .fin-cat-row:last-child{border-bottom:none;}
+
   /* ---------- Attendance grid ---------- */
   .att-row{
     display:flex;align-items:center;justify-content:space-between;
@@ -330,6 +347,7 @@
     <button class="tab-btn" id="navFees" onclick="showView('fees')">Fees</button>
     <button class="tab-btn" id="navAttendance" onclick="showView('attendance')">Attendance</button>
     <button class="tab-btn" id="navBatches" onclick="showView('batches')">Batches</button>
+    <button class="tab-btn" id="navFinance" onclick="showView('finance')">💰 Finance</button>
     <button class="tab-btn" id="navSettings" onclick="showView('settings')">Settings</button>
   </nav>
 </header>
@@ -549,6 +567,52 @@
     </div>
   </section>
 
+  <!-- ============ FINANCE ============ -->
+  <section class="view" id="view-finance">
+    <div class="card">
+      <label>Viewing Month</label>
+      <input type="month" id="financeMonth" onchange="renderFinanceView()">
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card good"><div class="label">Fee Income</div><div class="value num" id="finFeeIncome">₹0</div></div>
+      <div class="stat-card good"><div class="label">Other Income</div><div class="value num" id="finOtherIncome">₹0</div></div>
+      <div class="stat-card warn"><div class="label">Expenses</div><div class="value num" id="finExpenses">₹0</div></div>
+      <div class="stat-card" id="finNetCard"><div class="label">Net</div><div class="value num" id="finNet">₹0</div></div>
+    </div>
+
+    <div class="card">
+      <h3 id="finFormTitle">Add Expense / Other Income</h3>
+      <input type="hidden" id="finId">
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn rust small" id="finTypeExpenseBtn" onclick="setFinanceType('expense')">📤 Expense</button>
+        <button class="btn ghost small" id="finTypeIncomeBtn" onclick="setFinanceType('income')">📥 Other Income</button>
+      </div>
+      <label id="finCategoryLabel">Category</label>
+      <select id="finCategory"></select>
+      <div class="row2">
+        <div><label>Amount (₹)</label><input type="number" id="finAmount" placeholder="0"></div>
+        <div><label>Date</label><input type="date" id="finDate"></div>
+      </div>
+      <label>Note (optional)</label>
+      <input type="text" id="finNote" placeholder="e.g. Electricity bill for August">
+      <div class="btn-row">
+        <button class="btn primary small" onclick="saveFinanceEntry()">💾 Save</button>
+        <button class="btn ghost small" id="finCancelBtn" style="display:none;" onclick="cancelFinanceEdit()">Cancel</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Expense Breakdown This Month</h3>
+      <div id="finCategoryBreakdown"></div>
+    </div>
+
+    <div class="card">
+      <h3>All Entries This Month</h3>
+      <div id="finEntryList"></div>
+    </div>
+  </section>
+
   <!-- ============ SETTINGS ============ -->
   <section class="view" id="view-settings">
     <div class="card">
@@ -707,7 +771,7 @@
 let db = null;
 function openDB(){
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('coachingManagerDB', 1);
+    const req = indexedDB.open('coachingManagerDB', 2);
     req.onupgradeneeded = (e) => {
       const idb = e.target.result;
       if (!idb.objectStoreNames.contains('students')) idb.createObjectStore('students', {keyPath:'id'});
@@ -715,6 +779,7 @@ function openDB(){
       if (!idb.objectStoreNames.contains('payments')) idb.createObjectStore('payments', {keyPath:'id'});
       if (!idb.objectStoreNames.contains('attendance')) idb.createObjectStore('attendance', {keyPath:'id'});
       if (!idb.objectStoreNames.contains('settings')) idb.createObjectStore('settings', {keyPath:'key'});
+      if (!idb.objectStoreNames.contains('finance')) idb.createObjectStore('finance', {keyPath:'id'});
     };
     req.onsuccess = (e) => resolve(e.target.result);
     req.onerror = (e) => reject(e);
@@ -784,6 +849,7 @@ function showView(name){
   if (name === 'fees') renderFeesView();
   if (name === 'attendance') renderAttendanceSheet();
   if (name === 'batches') renderBatchList();
+  if (name === 'finance') renderFinanceView();
   if (name === 'settings'){ updateDriveStatusUI(); renderTrashList(); }
 }
 
@@ -2212,6 +2278,122 @@ async function deleteBatch(id){
 }
 
 /* =========================================================
+   FINANCE (Income & Expenses)
+   ========================================================= */
+const FINANCE_CATEGORIES = {
+  expense: ['Rent', 'Staff Salary', 'Electricity / Utilities', 'Stationery & Supplies', 'Marketing / Advertising', 'Maintenance & Repairs', 'Internet / Phone', 'Other'],
+  income: ['Registration Fee', 'Donation', 'Book / Material Sales', 'Other']
+};
+
+let financeType = 'expense';
+
+function setFinanceType(type){
+  financeType = type;
+  document.getElementById('finTypeExpenseBtn').className = 'btn small ' + (type==='expense' ? 'rust' : 'ghost');
+  document.getElementById('finTypeIncomeBtn').className = 'btn small ' + (type==='income' ? 'sage' : 'ghost');
+  document.getElementById('finCategoryLabel').textContent = type === 'expense' ? 'Category' : 'Source';
+  const catSel = document.getElementById('finCategory');
+  catSel.innerHTML = FINANCE_CATEGORIES[type].map(c => '<option value="'+c+'">'+c+'</option>').join('');
+}
+
+function currentFinanceMonth(){
+  const el = document.getElementById('financeMonth');
+  if (!el.value) el.value = todayStr().slice(0,7);
+  return el.value; // "YYYY-MM"
+}
+
+async function saveFinanceEntry(){
+  const amount = Number(document.getElementById('finAmount').value || 0);
+  if (amount <= 0){ alert('Enter a valid amount'); return; }
+  const id = document.getElementById('finId').value || uid();
+  const entry = {
+    id,
+    type: financeType,
+    category: document.getElementById('finCategory').value,
+    amount,
+    date: document.getElementById('finDate').value || todayStr(),
+    note: document.getElementById('finNote').value.trim()
+  };
+  await dbPut('finance', entry);
+  cancelFinanceEdit();
+  renderFinanceView();
+}
+
+function editFinanceEntry(entry){
+  setFinanceType(entry.type);
+  document.getElementById('finId').value = entry.id;
+  document.getElementById('finCategory').value = entry.category;
+  document.getElementById('finAmount').value = entry.amount;
+  document.getElementById('finDate').value = entry.date;
+  document.getElementById('finNote').value = entry.note || '';
+  document.getElementById('finFormTitle').textContent = 'Edit Entry';
+  document.getElementById('finCancelBtn').style.display = 'inline-flex';
+  document.getElementById('view-finance').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function cancelFinanceEdit(){
+  document.getElementById('finId').value = '';
+  document.getElementById('finAmount').value = '';
+  document.getElementById('finNote').value = '';
+  document.getElementById('finDate').value = todayStr();
+  document.getElementById('finFormTitle').textContent = 'Add Expense / Other Income';
+  document.getElementById('finCancelBtn').style.display = 'none';
+  setFinanceType(financeType);
+}
+
+async function deleteFinanceEntry(id){
+  if (!confirm('Delete this entry?')) return;
+  await dbDelete('finance', id);
+  renderFinanceView();
+}
+
+async function renderFinanceView(){
+  const month = currentFinanceMonth();
+  if (!document.getElementById('finDate').value) document.getElementById('finDate').value = todayStr();
+  if (!document.getElementById('finCategory').innerHTML) setFinanceType(financeType);
+
+  const [payments, finance] = await Promise.all([dbGetAll('payments'), dbGetAll('finance')]);
+
+  const feeIncome = payments
+    .filter(p => p.status !== 'reversed' && p.type !== 'discount' && (p.date||'').startsWith(month))
+    .reduce((a,p) => a + Number(p.amount||0), 0);
+
+  const monthEntries = finance.filter(f => (f.date||'').startsWith(month));
+  const otherIncome = monthEntries.filter(f => f.type === 'income').reduce((a,f) => a + Number(f.amount||0), 0);
+  const expenses = monthEntries.filter(f => f.type === 'expense').reduce((a,f) => a + Number(f.amount||0), 0);
+  const net = feeIncome + otherIncome - expenses;
+
+  document.getElementById('finFeeIncome').textContent = money(feeIncome);
+  document.getElementById('finOtherIncome').textContent = money(otherIncome);
+  document.getElementById('finExpenses').textContent = money(expenses);
+  const netEl = document.getElementById('finNet');
+  netEl.textContent = money(net);
+  document.getElementById('finNetCard').className = 'stat-card ' + (net >= 0 ? 'good' : 'warn');
+
+  const byCategory = {};
+  monthEntries.filter(f => f.type === 'expense').forEach(f => {
+    byCategory[f.category] = (byCategory[f.category] || 0) + Number(f.amount||0);
+  });
+  const catEntries = Object.entries(byCategory).sort((a,b) => b[1]-a[1]);
+  const catEl = document.getElementById('finCategoryBreakdown');
+  catEl.innerHTML = catEntries.length
+    ? catEntries.map(([cat, amt]) => '<div class="fin-cat-row"><span>'+escapeHtml(cat)+'</span><span class="num">'+money(amt)+'</span></div>').join('')
+    : '<div class="hint">No expenses recorded this month.</div>';
+
+  const sortedEntries = [...monthEntries].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const listEl = document.getElementById('finEntryList');
+  listEl.innerHTML = sortedEntries.length ? sortedEntries.map(f => `
+    <div class="fin-row ${f.type}">
+      <div class="info">
+        <div>${f.type === 'expense' ? '📤' : '📥'} <span class="amt">${money(f.amount)}</span> — ${escapeHtml(f.category)}</div>
+        <div class="meta">${escapeHtml(f.date)}${f.note ? ' · ' + escapeHtml(f.note) : ''}</div>
+      </div>
+      <button class="btn ghost small" onclick='editFinanceEntry(${JSON.stringify(f)})'>✏️</button>
+      <button class="btn rust small" onclick="deleteFinanceEntry('${f.id}')">🗑</button>
+    </div>`).join('') : '<div class="empty-state">No entries for this month yet.</div>';
+}
+
+/* =========================================================
    SETTINGS
    ========================================================= */
 async function loadSettings(){
@@ -2249,6 +2431,7 @@ async function buildBackupData(){
     batches: await dbGetAll('batches'),
     payments: await dbGetAll('payments'),
     attendance: await dbGetAll('attendance'),
+    finance: await dbGetAll('finance'),
     settings: SETTINGS,
     exportedAt: new Date().toISOString()
   };
@@ -2274,6 +2457,7 @@ async function restoreBackup(e){
     for (const b of (data.batches||[])) await dbPut('batches', b);
     for (const p of (data.payments||[])) await dbPut('payments', p);
     for (const a of (data.attendance||[])) await dbPut('attendance', a);
+    for (const f of (data.finance||[])) await dbPut('finance', f);
     if (data.settings){ SETTINGS = {...SETTINGS, ...data.settings, key:'main'}; await dbPut('settings', SETTINGS); }
     alert('Backup restored successfully.');
     loadSettings();
